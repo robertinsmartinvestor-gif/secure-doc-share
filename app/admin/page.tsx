@@ -16,19 +16,31 @@ export default function AdminPage() {
     setResult(null);
     setCopied(false);
 
-    const res = await fetch("/api/create-link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adminSecret, phoneNumber }),
-    });
-    const data = await res.json();
-    setLoading(false);
+    try {
+      const res = await fetch("/api/create-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminSecret, phoneNumber }),
+      });
 
-    if (!res.ok) {
-      setError(data.error || "Errore imprevisto");
-      return;
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setError(`Errore ${res.status}: richiesta non riuscita`);
+        return;
+      }
+
+      if (!res.ok) {
+        setError(data.error || "Errore imprevisto");
+        return;
+      }
+      setResult(data);
+    } catch {
+      setError("Errore di rete: impossibile contattare il server. Riprova.");
+    } finally {
+      setLoading(false);
     }
-    setResult(data);
   }
 
   function handleCopy() {
