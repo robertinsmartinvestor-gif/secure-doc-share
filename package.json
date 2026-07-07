@@ -1,15 +1,25 @@
 {
   "name": "secure-doc-share",
   "version": "1.0.0",
+  "private": true,
   "description": "Sistema per condividere documenti sensibili con un link monouso, protetto da: 1. Check geografico (IP + GPS del dispositivo) 2. OTP via SMS su un numero verificato della terza persona 3. Link a scadenza, usabile una sola volta",
-  "main": "index.js",
-  "directories": {
-    "lib": "lib"
-  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "twilio": "^5.2.2",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.15",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0"
+  }
 }
