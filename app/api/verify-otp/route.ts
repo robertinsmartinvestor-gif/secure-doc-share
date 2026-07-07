@@ -42,5 +42,5 @@ export async function POST(req: NextRequest) {
     result: "otp_verified",
   });
 
-  return NextResponse.json({ verified: true });
+  return NextResponse.json({ verified: true, expectedRecipientName: record.expectedRecipientName });
 }

@@ -7,9 +7,14 @@ import { randomBytes } from "crypto";
 
 export type AccessRecord = {
   token: string;
-  phoneNumber: string; // numero Cameroon della terza persona, es. +237XXXXXXXXX
-  expectedCountry: string; // "CM"
+  phoneNumber: string; // numero E.164 della terza persona, es. +237XXXXXXXXX
+  expectedCountry: string; // codice ISO a 2 lettere, es. "CM", "IT"
+  expectedRecipientName: string | null; // nome atteso impostato dall'admin: se presente, blocca/pre-compila il nome allo step di consenso
   documentFilenames: string[]; // nomi file dentro secure-files/ inclusi in questo link
+  ttlMinutes: number; // durata del link (in minuti) usata alla creazione
+  otpTtlMinutes: number; // durata dell'OTP (in minuti) da usare quando viene generato
+  testMode: boolean; // se true: niente invio SMS reale, il codice OTP torna nella risposta JSON di check-access
+  skipGeoCheck: boolean; // se true: salta interamente il controllo IP/GPS
   createdAt: number;
   expiresAt: number;
   otpCode: string | null;
@@ -28,21 +33,51 @@ export type AccessRecord = {
   }[];
 };
 
+export type TokenStatus = "created" | "otp_sent" | "verified" | "used" | "expired";
+
+export type TokenSummary = {
+  token: string; // troncato, per riferimento visuale senza esporre il token completo
+  phoneNumber: string;
+  status: TokenStatus;
+  createdAt: number;
+  expiresAt: number;
+};
+
 const store = new Map<string, AccessRecord>();
 
-export function createAccessLink(
-  phoneNumber: string,
-  documentFilenames: string[],
-  expectedCountry = "CM",
-  ttlMinutes = 60
-) {
+export function createAccessLink(options: {
+  phoneNumber: string;
+  documentFilenames: string[];
+  expectedCountry?: string;
+  expectedRecipientName?: string | null;
+  ttlMinutes?: number;
+  otpTtlMinutes?: number;
+  testMode?: boolean;
+  skipGeoCheck?: boolean;
+}) {
+  const {
+    phoneNumber,
+    documentFilenames,
+    expectedCountry = "CM",
+    expectedRecipientName = null,
+    ttlMinutes = 60,
+    otpTtlMinutes = 5,
+    testMode = false,
+    skipGeoCheck = false,
+  } = options;
+
   const token = randomBytes(24).toString("hex");
   const now = Date.now();
   const record: AccessRecord = {
     token,
     phoneNumber,
     expectedCountry,
+    expectedRecipientName,
     documentFilenames,
+    ttlMinutes,
+    otpTtlMinutes,
+    testMode,
+    skipGeoCheck,
     createdAt: now,
     expiresAt: now + ttlMinutes * 60 * 1000,
     otpCode: null,
@@ -93,4 +128,24 @@ export function recordConsent(token: string, recipientName: string) {
   if (!r) return;
   r.recipientName = recipientName;
   r.consentAcceptedAt = Date.now();
+}
+
+function deriveStatus(r: AccessRecord): TokenStatus {
+  if (r.used) return "used";
+  if (Date.now() > r.expiresAt) return "expired";
+  if (r.verified) return "verified";
+  if (r.otpCode) return "otp_sent";
+  return "created";
+}
+
+export function listAllTokens(): TokenSummary[] {
+  return Array.from(store.values())
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((r) => ({
+      token: `${r.token.slice(0, 8)}...`,
+      phoneNumber: r.phoneNumber,
+      status: deriveStatus(r),
+      createdAt: r.createdAt,
+      expiresAt: r.expiresAt,
+    }));
 }

@@ -9,10 +9,15 @@ export async function POST(req: NextRequest) {
   if (!record) return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   if (!record.verified)
     return NextResponse.json({ error: "vérification OTP non terminée" }, { status: 403 });
-  if (!recipientName || recipientName.trim().length < 2) {
+
+  // Se l'admin ha impostato un nome atteso per questo link, quel nome è
+  // vincolante: ignoriamo qualsiasi valore inviato dal client, così chi apre
+  // il link non può auto-dichiararsi con un nome diverso dopo l'OTP.
+  const finalName = record.expectedRecipientName || recipientName;
+  if (!finalName || finalName.trim().length < 2) {
     return NextResponse.json({ error: "nom invalide" }, { status: 400 });
   }
 
-  recordConsent(token, recipientName.trim());
+  recordConsent(token, finalName.trim());
   return NextResponse.json({ ok: true, documentFilenames: record.documentFilenames });
 }

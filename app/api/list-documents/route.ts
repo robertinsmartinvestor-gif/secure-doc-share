@@ -6,8 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { readdir } from "fs/promises";
 import path from "path";
 
-export async function POST(req: NextRequest) {
-  const { adminSecret } = await req.json();
+export async function GET(req: NextRequest) {
+  const adminSecret = req.headers.get("x-admin-secret") || req.nextUrl.searchParams.get("adminSecret");
 
   if (adminSecret !== process.env.ADMIN_SECRET) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

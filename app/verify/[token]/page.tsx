@@ -14,6 +14,7 @@ export default function VerifyPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [recipientName, setRecipientName] = useState("");
+  const [expectedRecipientName, setExpectedRecipientName] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [documentFilenames, setDocumentFilenames] = useState<string[]>([]);
 
@@ -67,6 +68,10 @@ export default function VerifyPage() {
     if (!res.ok) {
       setError(data.error || "Code invalide");
       return;
+    }
+    if (data.expectedRecipientName) {
+      setExpectedRecipientName(data.expectedRecipientName);
+      setRecipientName(data.expectedRecipientName);
     }
     setStep("consent");
   }
@@ -129,10 +134,19 @@ export default function VerifyPage() {
           <p style={{ color: "#555", marginBottom: 12 }}>Identité vérifiée.</p>
           <input
             value={recipientName}
-            onChange={(e) => setRecipientName(e.target.value)}
+            onChange={(e) => !expectedRecipientName && setRecipientName(e.target.value)}
             placeholder="Votre nom complet"
-            style={inputStyle}
+            readOnly={!!expectedRecipientName}
+            style={{
+              ...inputStyle,
+              ...(expectedRecipientName ? { background: "#eee", color: "#555" } : {}),
+            }}
           />
+          {expectedRecipientName && (
+            <p style={{ color: "#888", fontSize: 12, marginTop: -8, marginBottom: 12 }}>
+              Nom pré-renseigné par l&apos;expéditeur, non modifiable.
+            </p>
+          )}
           <label style={{ display: "flex", gap: 8, fontSize: 14, color: "#333", marginBottom: 16 }}>
             <input
               type="checkbox"

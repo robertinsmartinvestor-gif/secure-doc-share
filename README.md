@@ -20,28 +20,67 @@ della generazione.
 
 ## Come si usa
 
-1. Tu apri `/admin`, inserisci il tuo `ADMIN_SECRET`, il numero di telefono
-   Cameroon della terza persona (`+237...`) e i nomi dei file (già presenti in
-   `secure-files/`) da includere in questo link, separati da virgola
-   (es. `documenti.pdf, allegato.pdf`). In alternativa puoi chiamare
-   direttamente `POST /api/create-link` con `{ adminSecret, phoneNumber,
-   documentFilenames: ["documenti.pdf", "allegato.pdf"] }`. Ottieni un link tipo
-   `https://tuodominio.com/verify/<token>`.
-2. Mandi quel link (non i documenti) alla terza persona, sul canale che ritieni
-   più sicuro.
-3. La terza persona apre il link (interfaccia in francese, essendo il
-   destinatario francofono), concede il permesso GPS (o no), riceve un SMS
-   con un codice a 6 cifre, lo inserisce, inserisce il proprio nome e
-   accetta la clausola di riservatezza. Prima di scaricare, vede quanti e
-   quali documenti sono inclusi nel link.
-4. Ogni PDF scaricato ha un watermark diagonale ripetuto su ogni pagina con
+### Pagina admin (`/admin`)
+
+`/admin` è ora lo strumento centrale sia per generare link reali sia per
+testarli, senza dover chiamare le API a mano:
+
+1. Inserisci il tuo `ADMIN_SECRET` e premi **"Carica elenco file"**: la lista
+   dei PDF viene letta dinamicamente da `secure-files/` (via `GET
+   /api/list-documents`) e mostrata come checkbox, invece di doverli scrivere
+   a mano.
+2. Compila il form:
+   - **Numero di telefono**: qualsiasi numero in formato internazionale
+     E.164 (es. `+391234567890`, `+237XXXXXXXXX`), non solo Cameroon.
+   - **Paese atteso**: select con `Cameroon (CM)`, `Italia (IT)` oppure
+     `Altro` (in tal caso inserisci il codice ISO a 2 lettere, es. `FR`).
+   - **Nome atteso del destinatario** (opzionale): se lo valorizzi, questo
+     nome viene salvato nel link e mostrato **precompilato e non
+     modificabile** nello step di consenso che il destinatario vede dopo
+     l'OTP — così chi apre il link non può dichiarare un nome diverso.
+   - **Documenti da includere**: seleziona uno o più PDF dalla checkbox list.
+   - **Durata del link**: 30 minuti / 1 ora / 6 ore / 24 ore.
+   - **Durata OTP**: 5 o 15 minuti.
+   - **Modalità test**: se attiva, l'SMS reale non viene inviato; quando il
+     destinatario del link arriva allo step OTP, il codice generato torna
+     nella risposta JSON (`testCode`) e viene mostrato solo qui, mai nella
+     pagina pubblica `/verify/<token>`.
+   - **Disattiva check geografico**: se attiva, salta interamente il
+     controllo IP/GPS e procede sempre all'invio dell'OTP (utile per test da
+     reti/paesi diversi da quello atteso).
+3. Premi **"Genera link"**. Sotto compare un riepilogo completo: link,
+   numero destinatario, paese atteso, nome atteso (se impostato), documenti
+   inclusi, data/ora di scadenza e se la modalità test è attiva.
+4. In fondo alla pagina trovi lo **storico dei link generati** (via `GET
+   /api/list-links`), con token troncato, numero, stato dedotto
+   (`Creato` / `OTP inviato` / `Verificato` / `Usato` / `Scaduto`), data di
+   creazione e scadenza. Premi **"Aggiorna"** per ricaricarlo.
+
+In alternativa puoi chiamare direttamente `POST /api/create-link` con
+`{ adminSecret, phoneNumber, documentFilenames, expectedCountry,
+expectedRecipientName?, ttlMinutes?, otpTtlMinutes?, testMode?, skipGeoCheck?
+}`.
+
+### Flusso del destinatario
+
+1. Mandi il link generato (non i documenti) alla terza persona, sul canale
+   che ritieni più sicuro.
+2. La terza persona apre il link (interfaccia in francese, essendo il
+   destinatario francofono), concede il permesso GPS (o no, a meno che il
+   check geografico sia stato disattivato), riceve un SMS con un codice a 6
+   cifre (oppure, in modalità test, il codice è visibile solo lato admin),
+   lo inserisce, poi vede il nome (libero, oppure precompilato e bloccato se
+   l'admin ne ha impostato uno) e accetta la clausola di riservatezza.
+   Prima di scaricare, vede quanti e quali documenti sono inclusi nel link.
+3. Ogni PDF scaricato ha un watermark diagonale ripetuto su ogni pagina con
    nome, data/ora e IP di chi lo ha scaricato — visibile anche stampato.
    - Se il link include **un solo documento**, il download restituisce
      direttamente il PDF con watermark.
    - Se il link include **più documenti**, tutti i PDF vengono prima
      marchiati con il watermark e poi impacchettati in un unico file
      `.zip` da scaricare.
-5. Il link diventa inutilizzabile dopo un download o dopo la scadenza (default 1h).
+4. Il link diventa inutilizzabile dopo un download o dopo la scadenza
+   scelta alla creazione (default 1h).
 
 ## Cosa NON risolve questo sistema
 

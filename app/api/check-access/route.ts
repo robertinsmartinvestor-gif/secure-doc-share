@@ -30,6 +30,18 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getIp(req);
+
+  if (record.skipGeoCheck) {
+    logAttempt(token, {
+      timestamp: Date.now(),
+      ip,
+      country: null,
+      gpsCountryMatch: null,
+      result: "otp_sent",
+    });
+    return sendOtp(record);
+  }
+
   const ipCountry = await lookupIpCountry(ip);
 
   const gpsMatch = gpsCountry ? gpsCountry === record.expectedCountry : null;
@@ -55,11 +67,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Genera OTP a 6 cifre e invialo via SMS al numero registrato per questo link
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  setOtp(token, code, 5);
-  await sendOtpSms(record.phoneNumber, code);
+  return sendOtp(record);
+}
 
+async function sendOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>) {
+  // Genera OTP a 6 cifre. In modalità test non viene inviato via SMS: torna
+  // direttamente nella risposta JSON, così la pagina admin può mostrarlo
+  // senza consumare credito Twilio durante i test.
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  setOtp(record.token, code, record.otpTtlMinutes);
+
+  if (record.testMode) {
+    return NextResponse.json({ otpSent: true, testCode: code });
+  }
+
+  await sendOtpSms(record.phoneNumber, code);
   return NextResponse.json({ otpSent: true });
 }
 
