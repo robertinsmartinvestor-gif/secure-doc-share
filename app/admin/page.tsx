@@ -5,11 +5,53 @@ import { useState } from "react";
 export default function AdminPage() {
   const [adminSecret, setAdminSecret] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("+237");
-  const [documentFilenames, setDocumentFilenames] = useState("documenti.pdf");
+  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ link: string; expiresAt: number } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  async function handleLoadFiles() {
+    setFilesLoading(true);
+    setFilesError(null);
+    setAvailableFiles([]);
+    setSelectedFiles([]);
+
+    try {
+      const res = await fetch("/api/list-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminSecret }),
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setFilesError(`Errore ${res.status}: richiesta non riuscita`);
+        return;
+      }
+
+      if (!res.ok) {
+        setFilesError(data.error || "Errore imprevisto");
+        return;
+      }
+      setAvailableFiles(data.filenames || []);
+    } catch {
+      setFilesError("Errore di rete: impossibile contattare il server. Riprova.");
+    } finally {
+      setFilesLoading(false);
+    }
+  }
+
+  function toggleFile(filename: string) {
+    setSelectedFiles((prev) =>
+      prev.includes(filename) ? prev.filter((f) => f !== filename) : [...prev, filename]
+    );
+  }
 
   async function handleGenerate() {
     setLoading(true);
@@ -17,16 +59,11 @@ export default function AdminPage() {
     setResult(null);
     setCopied(false);
 
-    const filenames = documentFilenames
-      .split(",")
-      .map((f) => f.trim())
-      .filter((f) => f.length > 0);
-
     try {
       const res = await fetch("/api/create-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminSecret, phoneNumber, documentFilenames: filenames }),
+        body: JSON.stringify({ adminSecret, phoneNumber, documentFilenames: selectedFiles }),
       });
 
       let data;
@@ -77,19 +114,44 @@ export default function AdminPage() {
         style={inputStyle}
       />
 
-      <label style={labelStyle}>
-        File da includere (nomi in secure-files/, separati da virgola)
-      </label>
-      <input
-        value={documentFilenames}
-        onChange={(e) => setDocumentFilenames(e.target.value)}
-        placeholder="documenti.pdf, allegato.pdf"
-        style={inputStyle}
-      />
+      <label style={labelStyle}>File da includere (da secure-files/)</label>
+      <button
+        onClick={handleLoadFiles}
+        disabled={filesLoading || !adminSecret}
+        style={{ ...buttonStyle, background: "#555", marginTop: 0, opacity: filesLoading ? 0.6 : 1 }}
+      >
+        {filesLoading ? "Caricamento..." : "Carica elenco file"}
+      </button>
+
+      {filesError && <p style={{ color: "#c33", marginTop: 8 }}>{filesError}</p>}
+
+      {availableFiles.length > 0 && (
+        <div style={{ marginTop: 12, marginBottom: 8 }}>
+          {availableFiles.map((filename) => (
+            <label
+              key={filename}
+              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333", marginBottom: 6 }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedFiles.includes(filename)}
+                onChange={() => toggleFile(filename)}
+              />
+              {filename}
+            </label>
+          ))}
+        </div>
+      )}
+
+      {availableFiles.length === 0 && !filesLoading && !filesError && (
+        <p style={{ fontSize: 13, color: "#888", marginTop: 8 }}>
+          Nessun file caricato. Premi &quot;Carica elenco file&quot;.
+        </p>
+      )}
 
       <button
         onClick={handleGenerate}
-        disabled={loading || !adminSecret || phoneNumber.length < 9 || documentFilenames.trim().length === 0}
+        disabled={loading || !adminSecret || phoneNumber.length < 9 || selectedFiles.length === 0}
         style={{ ...buttonStyle, opacity: loading ? 0.6 : 1 }}
       >
         {loading ? "Generazione..." : "Genera link"}
