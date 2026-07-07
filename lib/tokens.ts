@@ -41,6 +41,8 @@ export type TokenSummary = {
   status: TokenStatus;
   createdAt: number;
   expiresAt: number;
+  testMode: boolean;
+  testCode: string | null; // OTP visibile solo per link in modalità test, e solo finché non usati
 };
 
 const store = new Map<string, AccessRecord>();
@@ -147,5 +149,9 @@ export function listAllTokens(): TokenSummary[] {
       status: deriveStatus(r),
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
+      testMode: r.testMode,
+      // Non esposto più una volta che il link è stato usato: serve solo
+      // come comodità per i test, non deve restare visibile a tempo indeterminato.
+      testCode: r.testMode && !r.used ? r.otpCode : null,
     }));
 }

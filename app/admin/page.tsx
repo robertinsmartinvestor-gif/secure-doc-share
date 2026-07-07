@@ -23,6 +23,8 @@ type LinkSummary = {
   status: LinkStatus;
   createdAt: number;
   expiresAt: number;
+  testMode: boolean;
+  testCode: string | null;
 };
 
 const STATUS_LABELS: Record<LinkStatus, string> = {
@@ -373,6 +375,7 @@ export default function AdminPage() {
               <th style={thStyle}>Stato</th>
               <th style={thStyle}>Creato</th>
               <th style={thStyle}>Scadenza</th>
+              <th style={thStyle}>Codice test</th>
             </tr>
           </thead>
           <tbody>
@@ -383,6 +386,9 @@ export default function AdminPage() {
                 <td style={tdStyle}>{STATUS_LABELS[l.status]}</td>
                 <td style={tdStyle}>{new Date(l.createdAt).toLocaleString("it-IT")}</td>
                 <td style={tdStyle}>{new Date(l.expiresAt).toLocaleString("it-IT")}</td>
+                <td style={tdStyle}>
+                  {l.testCode ? <code>{l.testCode}</code> : l.testMode ? "—" : ""}
+                </td>
               </tr>
             ))}
           </tbody>
