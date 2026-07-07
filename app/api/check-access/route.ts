@@ -62,7 +62,10 @@ export async function POST(req: NextRequest) {
 
   if (blocked) {
     return NextResponse.json(
-      { error: "Accès non autorisé depuis cette position." },
+      {
+        error:
+          "Accès refusé : votre position ne correspond pas au pays autorisé pour ce document. Si vous utilisez un VPN, désactivez-le et réessayez. Si le problème persiste, contactez la personne qui vous a envoyé ce lien.",
+      },
       { status: 403 }
     );
   }
