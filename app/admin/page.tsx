@@ -51,6 +51,8 @@ const MANUAL_OTP_TTL_OPTIONS = [
   { value: 15, label: "15 minuti" },
   { value: 30, label: "30 minuti" },
   { value: 60, label: "60 minuti" },
+  { value: 720, label: "12 ore" },
+  { value: 1440, label: "24 ore" },
 ];
 
 export default function AdminPage() {
@@ -300,6 +302,12 @@ export default function AdminPage() {
               </option>
             ))}
           </select>
+          {manualOtpTtlMinutes > ttlMinutes && (
+            <p style={{ fontSize: 12, color: "#a66", marginTop: -4, marginBottom: 8 }}>
+              La durata OTP scelta supera la durata del link ({TTL_OPTIONS.find((o) => o.value === ttlMinutes)?.label}):
+              la durata del link verrà estesa automaticamente per coprire l&apos;intero periodo dell&apos;OTP.
+            </p>
+          )}
         </>
       ) : (
         <p style={{ fontSize: 12, color: "#888", marginTop: 12 }}>

@@ -224,7 +224,27 @@ export default function VerifyPage() {
       )}
 
       {(step === "error" || error) && (
-        <p style={{ color: "#c33", marginTop: 16 }}>{error}</p>
+        <>
+          {error?.includes("Accès refusé") && (
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#c33"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: "block", marginTop: 16, marginBottom: 4 }}
+              aria-hidden="true"
+            >
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+              <line x1="4" y1="20" x2="20" y2="4" />
+            </svg>
+          )}
+          <p style={{ color: "#c33", marginTop: 16 }}>{error}</p>
+        </>
       )}
     </main>
   );

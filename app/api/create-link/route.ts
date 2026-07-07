@@ -8,7 +8,7 @@ import { createAccessLink, setOtp } from "@/lib/tokens";
 const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 const COUNTRY_RE = /^[A-Za-z]{2}$/;
 const ALLOWED_TTL_MINUTES = [30, 60, 360, 1440];
-const ALLOWED_MANUAL_OTP_TTL_MINUTES = [15, 30, 60];
+const ALLOWED_MANUAL_OTP_TTL_MINUTES = [15, 30, 60, 720, 1440];
 const NORMAL_OTP_TTL_MINUTES = 5;
 
 export async function POST(req: NextRequest) {
@@ -73,6 +73,16 @@ export async function POST(req: NextRequest) {
     ? otpTtlMinutes ?? ALLOWED_MANUAL_OTP_TTL_MINUTES[0]
     : NORMAL_OTP_TTL_MINUTES;
 
+  // Un OTP che sopravvive più a lungo del link stesso non avrebbe senso: il
+  // link bloccherebbe l'accesso prima che l'OTP scada. Se la durata OTP
+  // scelta supera il TTL del link, estendiamo il TTL del link al più
+  // piccolo valore ammesso che copre l'intera durata OTP.
+  let resolvedTtlMinutes = ttlMinutes ?? 60;
+  if (manualOtpModeFlag && resolvedTtlMinutes < resolvedOtpTtlMinutes) {
+    const bumped = ALLOWED_TTL_MINUTES.find((t) => t >= resolvedOtpTtlMinutes);
+    resolvedTtlMinutes = bumped ?? ALLOWED_TTL_MINUTES[ALLOWED_TTL_MINUTES.length - 1];
+  }
+
   if (!Array.isArray(documents) || documents.length === 0) {
     return NextResponse.json(
       { error: "documents mancante: carica almeno un PDF prima di generare il link" },
@@ -91,7 +101,7 @@ export async function POST(req: NextRequest) {
     documents,
     expectedCountry: expectedCountry.toUpperCase(),
     expectedRecipientName: expectedRecipientName?.trim() || null,
-    ttlMinutes: ttlMinutes ?? 60,
+    ttlMinutes: resolvedTtlMinutes,
     otpTtlMinutes: resolvedOtpTtlMinutes,
     testMode: testMode === true,
     manualOtpMode: manualOtpModeFlag,
