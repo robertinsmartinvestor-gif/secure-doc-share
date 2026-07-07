@@ -33,8 +33,9 @@ export async function GET(req: NextRequest) {
   await setWatermarkCode(token, watermarkCode);
 
   // I documenti sono su Vercel Blob (URL salvato nel record al momento della
-  // creazione del link), non più su filesystem locale.
-  const watermarkedFiles: { filename: string; bytes: Uint8Array }[] = [];
+  // creazione del link), non più su filesystem locale. Ogni documento viene
+  // scaricato e marchiato singolarmente, indipendentemente da quanti sono.
+  const watermarkedFiles: { displayName: string; bytes: Uint8Array }[] = [];
   for (const doc of record.documents) {
     const fileBuffer = await downloadDocument(doc.url);
     const watermarked = await applyWatermark(fileBuffer, {
@@ -44,23 +45,35 @@ export async function GET(req: NextRequest) {
       timestamp: downloadTimestamp,
       watermarkCode,
     });
-    watermarkedFiles.push({ filename: doc.filename, bytes: watermarked });
+    watermarkedFiles.push({ displayName: doc.displayName, bytes: watermarked });
   }
 
   await markUsed(token);
 
+  // Un solo documento: PDF diretto. Più documenti: zip con tutti i PDF
+  // già marchiati.
   if (watermarkedFiles.length === 1) {
     return new NextResponse(Buffer.from(watermarkedFiles[0].bytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${watermarkedFiles[0].filename}"`,
+        "Content-Disposition": `attachment; filename="${watermarkedFiles[0].displayName}"`,
       },
     });
   }
 
   const zip = new JSZip();
-  for (const { filename, bytes } of watermarkedFiles) {
-    zip.file(filename, bytes);
+  const usedNames = new Set<string>();
+  for (const { displayName, bytes } of watermarkedFiles) {
+    // Se due documenti nello stesso link hanno lo stesso nome, disambiguali
+    // nello zip: altrimenti JSZip sovrascriverebbe silenziosamente il primo.
+    let name = displayName;
+    let suffix = 2;
+    while (usedNames.has(name)) {
+      name = displayName.replace(/\.pdf$/i, ` (${suffix}).pdf`);
+      suffix += 1;
+    }
+    usedNames.add(name);
+    zip.file(name, bytes);
   }
   const zipBuffer = await zip.generateAsync({ type: "uint8array" });
 

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
   if (!documents.every(isValidDocument)) {
     return NextResponse.json(
-      { error: "documents contiene voci non valide: ogni documento deve avere filename (*.pdf) e url Blob validi" },
+      { error: "documents contiene voci non valide: ogni documento deve avere displayName (*.pdf) e url Blob validi" },
       { status: 400 }
     );
   }
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     phoneNumber: record.phoneNumber,
     expectedCountry: record.expectedCountry,
     expectedRecipientName: record.expectedRecipientName,
-    documentFilenames: record.documents.map((d) => d.filename),
+    documentFilenames: record.documents.map((d) => d.displayName),
     expiresAt: record.expiresAt,
     testMode: record.testMode,
     manualOtpMode: record.manualOtpMode,
@@ -126,17 +126,17 @@ export async function POST(req: NextRequest) {
 // I documenti arrivano già caricati su Vercel Blob via POST /api/upload:
 // qui validiamo solo la forma dei dati (nessun path traversal, url Blob
 // plausibile), non il contenuto del file.
-function isValidDocument(doc: unknown): doc is { filename: string; url: string } {
+function isValidDocument(doc: unknown): doc is { url: string; displayName: string } {
   if (typeof doc !== "object" || doc === null) return false;
-  const { filename, url } = doc as { filename?: unknown; url?: unknown };
-  if (typeof filename !== "string" || !isValidFilename(filename)) return false;
+  const { displayName, url } = doc as { displayName?: unknown; url?: unknown };
+  if (typeof displayName !== "string" || !isValidDisplayName(displayName)) return false;
   if (typeof url !== "string" || !isValidBlobUrl(url)) return false;
   return true;
 }
 
 // Accetta qualsiasi nome file *.pdf (spazi, accenti, parentesi inclusi),
 // purché non contenga separatori di percorso o riferimenti relativi.
-function isValidFilename(name: string): boolean {
+function isValidDisplayName(name: string): boolean {
   if (!name.toLowerCase().endsWith(".pdf")) return false;
   if (name.includes("/") || name.includes("\\")) return false;
   if (name === "." || name === "..") return false;

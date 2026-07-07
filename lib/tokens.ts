@@ -11,7 +11,7 @@ export type AccessRecord = {
   phoneNumber: string; // numero E.164 della terza persona, es. +237XXXXXXXXX
   expectedCountry: string; // codice ISO a 2 lettere, es. "CM", "IT"
   expectedRecipientName: string | null; // nome atteso impostato dall'admin: se presente, blocca/pre-compila il nome allo step di consenso
-  documents: { filename: string; url: string }[]; // documenti inclusi nel link: nome originale + URL Vercel Blob
+  documents: { url: string; displayName: string }[]; // documenti inclusi nel link: URL Vercel Blob + nome da mostrare
   ttlMinutes: number; // durata del link (in minuti) usata alla creazione
   otpTtlMinutes: number; // durata dell'OTP (in minuti) da usare quando viene generato
   testMode: boolean; // se true: niente invio SMS reale, il codice OTP torna nella risposta JSON di check-access (per sviluppo/test)
@@ -46,6 +46,8 @@ export type TokenSummary = {
   expiresAt: number;
   testMode: boolean;
   testCode: string | null; // OTP visibile solo per link in modalità test, e solo finché non usati
+  documentCount: number;
+  documentNames: string[];
 };
 
 // Client Redis creato in modo lazy (non al caricamento del modulo) così che
@@ -92,7 +94,7 @@ async function saveRecord(record: AccessRecord): Promise<void> {
 
 export async function createAccessLink(options: {
   phoneNumber: string;
-  documents: { filename: string; url: string }[];
+  documents: { url: string; displayName: string }[];
   expectedCountry?: string;
   expectedRecipientName?: string | null;
   ttlMinutes?: number;
@@ -150,7 +152,30 @@ export async function createAccessLink(options: {
 
 export async function getAccessRecord(token: string): Promise<AccessRecord | null> {
   const record = await getRedis().get<AccessRecord>(tokenKey(token));
-  return record ?? null;
+  return record ? normalizeDocuments(record) : null;
+}
+
+// Difesa contro record scritti da una versione precedente di createAccessLink
+// che salvava `documents` come singolo oggetto invece che come array (o con
+// il vecchio campo `filename` invece di `displayName`): senza questa
+// normalizzazione un record "vecchio" ancora in Redis (non ancora scaduto)
+// romperebbe .map()/.length lato route.
+function normalizeDocuments(record: AccessRecord): AccessRecord {
+  const raw = record.documents as unknown;
+  if (Array.isArray(raw)) {
+    record.documents = raw.map((d) => {
+      const doc = d as { url?: string; displayName?: string; filename?: string };
+      return { url: doc.url ?? "", displayName: doc.displayName ?? doc.filename ?? "documento.pdf" };
+    });
+    return record;
+  }
+  if (raw && typeof raw === "object") {
+    const doc = raw as { url?: string; displayName?: string; filename?: string };
+    record.documents = doc.url ? [{ url: doc.url, displayName: doc.displayName ?? doc.filename ?? "documento.pdf" }] : [];
+    return record;
+  }
+  record.documents = [];
+  return record;
 }
 
 export async function logAttempt(token: string, entry: AccessRecord["attempts"][number]): Promise<void> {
@@ -230,13 +255,14 @@ export async function listAllTokens(): Promise<TokenSummary[]> {
   const summaries: TokenSummary[] = [];
   const staleTokens: string[] = [];
 
-  records.forEach((r, i) => {
-    if (!r) {
+  records.forEach((raw, i) => {
+    if (!raw) {
       // La chiave token:* è scaduta via TTL ma il riferimento nella sorted
       // set è rimasto: lo ripuliamo qui invece di lasciarlo crescere.
       staleTokens.push(orderedTokens[i]);
       return;
     }
+    const r = normalizeDocuments(raw);
     summaries.push({
       token: `${r.token.slice(0, 8)}...`,
       phoneNumber: r.phoneNumber,
@@ -247,6 +273,8 @@ export async function listAllTokens(): Promise<TokenSummary[]> {
       // Non esposto più una volta che il link è stato usato: serve solo
       // come comodità per i test, non deve restare visibile a tempo indeterminato.
       testCode: r.testMode && !r.used ? r.otpCode : null,
+      documentCount: r.documents.length,
+      documentNames: r.documents.map((d) => d.displayName),
     });
   });
 

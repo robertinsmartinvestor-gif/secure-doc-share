@@ -19,5 +19,5 @@ export async function POST(req: NextRequest) {
   }
 
   await recordConsent(token, finalName.trim());
-  return NextResponse.json({ ok: true, documentFilenames: record.documents.map((d) => d.filename) });
+  return NextResponse.json({ ok: true, documentFilenames: record.documents.map((d) => d.displayName) });
 }

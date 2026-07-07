@@ -28,6 +28,8 @@ type LinkSummary = {
   expiresAt: number;
   testMode: boolean;
   testCode: string | null;
+  documentCount: number;
+  documentNames: string[];
 };
 
 const STATUS_LABELS: Record<LinkStatus, string> = {
@@ -100,7 +102,7 @@ export default function AdminPage() {
     setSelectedFiles((prev) => prev.filter((f) => f.name !== name));
   }
 
-  async function uploadFile(file: File): Promise<{ filename: string; url: string }> {
+  async function uploadFile(file: File): Promise<{ url: string; displayName: string }> {
     const formData = new FormData();
     formData.append("adminSecret", adminSecret);
     formData.append("file", file);
@@ -117,7 +119,7 @@ export default function AdminPage() {
     if (!res.ok) {
       throw new Error(data.error || `Errore ${res.status} durante il caricamento di ${file.name}`);
     }
-    return { filename: data.filename, url: data.url };
+    return { url: data.url, displayName: data.filename };
   }
 
   async function handleGenerate() {
@@ -128,7 +130,7 @@ export default function AdminPage() {
     setCopied(false);
 
     try {
-      let documents: { filename: string; url: string }[];
+      let documents: { url: string; displayName: string }[];
       try {
         documents = await Promise.all(selectedFiles.map(uploadFile));
       } catch (uploadErr) {
@@ -428,6 +430,7 @@ export default function AdminPage() {
             <tr>
               <th style={thStyle}>Token</th>
               <th style={thStyle}>Numero</th>
+              <th style={thStyle}>Documenti</th>
               <th style={thStyle}>Stato</th>
               <th style={thStyle}>Creato</th>
               <th style={thStyle}>Scadenza</th>
@@ -439,6 +442,9 @@ export default function AdminPage() {
               <tr key={l.token}>
                 <td style={tdStyle}><code>{l.token}</code></td>
                 <td style={tdStyle}>{l.phoneNumber}</td>
+                <td style={tdStyle} title={l.documentNames.join(", ")}>
+                  {l.documentCount} {l.documentCount === 1 ? "documento" : "documenti"}
+                </td>
                 <td style={tdStyle}>{STATUS_LABELS[l.status]}</td>
                 <td style={tdStyle}>{new Date(l.createdAt).toLocaleString("it-IT")}</td>
                 <td style={tdStyle}>{new Date(l.expiresAt).toLocaleString("it-IT")}</td>
