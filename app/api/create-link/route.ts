@@ -7,7 +7,6 @@ import { createAccessLink } from "@/lib/tokens";
 import { access } from "fs/promises";
 import path from "path";
 
-const FILENAME_RE = /^[a-zA-Z0-9_.\-]+\.pdf$/i;
 const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 const COUNTRY_RE = /^[A-Za-z]{2}$/;
 const ALLOWED_TTL_MINUTES = [30, 60, 360, 1440];
@@ -65,7 +64,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!documentFilenames.every((f) => typeof f === "string" && FILENAME_RE.test(f))) {
+  if (!documentFilenames.every((f) => typeof f === "string" && isValidFilename(f))) {
     return NextResponse.json(
       { error: "documentFilenames contiene nomi file non validi (solo *.pdf, senza percorsi)" },
       { status: 400 }
@@ -109,4 +108,14 @@ export async function POST(req: NextRequest) {
     testMode: record.testMode,
     skipGeoCheck: record.skipGeoCheck,
   });
+}
+
+// Accetta qualsiasi nome file *.pdf (spazi, accenti, parentesi inclusi),
+// purché non contenga separatori di percorso o riferimenti relativi che
+// permetterebbero di uscire da secure-files/.
+function isValidFilename(name: string): boolean {
+  if (!name.toLowerCase().endsWith(".pdf")) return false;
+  if (name.includes("/") || name.includes("\\")) return false;
+  if (name === "." || name === "..") return false;
+  return name === path.basename(name);
 }
