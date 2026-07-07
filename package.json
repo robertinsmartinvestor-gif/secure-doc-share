@@ -1,0 +1,15 @@
+{
+  "name": "secure-doc-share",
+  "version": "1.0.0",
+  "description": "Sistema per condividere documenti sensibili con un link monouso, protetto da: 1. Check geografico (IP + GPS del dispositivo) 2. OTP via SMS su un numero verificato della terza persona 3. Link a scadenza, usabile una sola volta",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
