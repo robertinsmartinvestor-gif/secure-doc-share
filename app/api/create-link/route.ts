@@ -3,14 +3,15 @@
 // In produzione mettici dietro autenticazione (es. controllo di una tua sessione admin).
 
 import { NextRequest, NextResponse } from "next/server";
-import { createAccessLink } from "@/lib/tokens";
+import { createAccessLink, setOtp } from "@/lib/tokens";
 import { access } from "fs/promises";
 import path from "path";
 
 const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 const COUNTRY_RE = /^[A-Za-z]{2}$/;
 const ALLOWED_TTL_MINUTES = [30, 60, 360, 1440];
-const ALLOWED_OTP_TTL_MINUTES = [5, 15];
+const ALLOWED_MANUAL_OTP_TTL_MINUTES = [15, 30, 60];
+const NORMAL_OTP_TTL_MINUTES = 5;
 
 export async function POST(req: NextRequest) {
   const {
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     ttlMinutes,
     otpTtlMinutes,
     testMode,
+    manualOtpMode,
     skipGeoCheck,
   } = await req.json();
 
@@ -51,12 +53,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (otpTtlMinutes !== undefined && !ALLOWED_OTP_TTL_MINUTES.includes(otpTtlMinutes)) {
+  if (testMode === true && manualOtpMode === true) {
     return NextResponse.json(
-      { error: `otpTtlMinutes non valido: valori ammessi ${ALLOWED_OTP_TTL_MINUTES.join(", ")}` },
+      { error: "Modalità test e Invio manuale OTP sono mutuamente esclusive: attivane solo una" },
       { status: 400 }
     );
   }
+
+  const manualOtpModeFlag = manualOtpMode === true;
+  if (
+    manualOtpModeFlag &&
+    otpTtlMinutes !== undefined &&
+    !ALLOWED_MANUAL_OTP_TTL_MINUTES.includes(otpTtlMinutes)
+  ) {
+    return NextResponse.json(
+      { error: `otpTtlMinutes non valido per l'invio manuale: valori ammessi ${ALLOWED_MANUAL_OTP_TTL_MINUTES.join(", ")}` },
+      { status: 400 }
+    );
+  }
+  const resolvedOtpTtlMinutes = manualOtpModeFlag
+    ? otpTtlMinutes ?? ALLOWED_MANUAL_OTP_TTL_MINUTES[0]
+    : NORMAL_OTP_TTL_MINUTES;
 
   if (!Array.isArray(documentFilenames) || documentFilenames.length === 0) {
     return NextResponse.json(
@@ -92,10 +109,20 @@ export async function POST(req: NextRequest) {
     expectedCountry: expectedCountry.toUpperCase(),
     expectedRecipientName: expectedRecipientName?.trim() || null,
     ttlMinutes: ttlMinutes ?? 60,
-    otpTtlMinutes: otpTtlMinutes ?? 5,
+    otpTtlMinutes: resolvedOtpTtlMinutes,
     testMode: testMode === true,
+    manualOtpMode: manualOtpModeFlag,
     skipGeoCheck: skipGeoCheck === true,
   });
+
+  // In modalità "invio manuale" l'OTP viene generato subito, non al primo
+  // check-access del destinatario, così l'admin può comunicarlo da subito
+  // sul canale che preferisce (telefonata, WhatsApp...) senza tempi morti.
+  let manualOtpCode: string | null = null;
+  if (record.manualOtpMode) {
+    manualOtpCode = String(Math.floor(100000 + Math.random() * 900000));
+    setOtp(record.token, manualOtpCode, record.otpTtlMinutes);
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   return NextResponse.json({
@@ -106,6 +133,9 @@ export async function POST(req: NextRequest) {
     documentFilenames: record.documentFilenames,
     expiresAt: record.expiresAt,
     testMode: record.testMode,
+    manualOtpMode: record.manualOtpMode,
+    manualOtpCode,
+    otpTtlMinutes: record.otpTtlMinutes,
     skipGeoCheck: record.skipGeoCheck,
   });
 }

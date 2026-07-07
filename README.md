@@ -40,17 +40,31 @@ testarli, senza dover chiamare le API a mano:
      l'OTP — così chi apre il link non può dichiarare un nome diverso.
    - **Documenti da includere**: seleziona uno o più PDF dalla checkbox list.
    - **Durata del link**: 30 minuti / 1 ora / 6 ore / 24 ore.
-   - **Durata OTP**: 5 o 15 minuti.
-   - **Modalità test**: se attiva, l'SMS reale non viene inviato; quando il
-     destinatario del link arriva allo step OTP, il codice generato torna
-     nella risposta JSON (`testCode`) e viene mostrato solo qui, mai nella
-     pagina pubblica `/verify/<token>`.
+   - **Durata OTP**: fissa a 5 minuti, tranne quando è attiva la modalità
+     "Invio manuale OTP" (vedi sotto), dove diventa selezionabile.
+   - **Modalità test**: pensata per lo **sviluppo**. Se attiva, l'SMS reale
+     non viene inviato; quando il destinatario del link arriva allo step OTP,
+     il codice generato torna nella risposta JSON (`testCode`) e viene
+     mostrato solo qui, mai nella pagina pubblica `/verify/<token>`.
+   - **Invio manuale OTP**: pensata per l'**uso reale** quando non vuoi (o
+     non puoi) usare Twilio a pagamento. Mutuamente esclusiva con la
+     modalità test: attivandola si disattiva l'altra e viceversa. A
+     differenza della modalità test, il codice OTP viene generato **subito
+     alla creazione del link** (non al primo accesso del destinatario) e
+     mostrato nel riepilogo, così puoi comunicarlo tu stesso al destinatario
+     sul canale che preferisci (telefonata, WhatsApp...) insieme al link,
+     evitando tempi morti. Compare anche un select **"Durata OTP (invio
+     manuale)"** con 15 / 30 / 60 minuti: usa un valore più alto della
+     modalità automatica perché qui il codice deve restare valido per tutto
+     il tempo che impieghi a comunicarlo e il destinatario a usarlo.
    - **Disattiva check geografico**: se attiva, salta interamente il
      controllo IP/GPS e procede sempre all'invio dell'OTP (utile per test da
      reti/paesi diversi da quello atteso).
 3. Premi **"Genera link"**. Sotto compare un riepilogo completo: link,
    numero destinatario, paese atteso, nome atteso (se impostato), documenti
-   inclusi, data/ora di scadenza e se la modalità test è attiva.
+   inclusi, data/ora di scadenza, se la modalità test è attiva e se l'invio
+   manuale OTP è attivo — in tal caso il codice OTP stesso è mostrato in
+   evidenza, pronto da copiare e comunicare.
 4. In fondo alla pagina trovi lo **storico dei link generati** (via `GET
    /api/list-links`), con token troncato, numero, stato dedotto
    (`Creato` / `OTP inviato` / `Verificato` / `Usato` / `Scaduto`), data di
@@ -58,8 +72,8 @@ testarli, senza dover chiamare le API a mano:
 
 In alternativa puoi chiamare direttamente `POST /api/create-link` con
 `{ adminSecret, phoneNumber, documentFilenames, expectedCountry,
-expectedRecipientName?, ttlMinutes?, otpTtlMinutes?, testMode?, skipGeoCheck?
-}`.
+expectedRecipientName?, ttlMinutes?, otpTtlMinutes?, testMode?,
+manualOtpMode?, skipGeoCheck? }`.
 
 ### Flusso del destinatario
 
@@ -67,13 +81,18 @@ expectedRecipientName?, ttlMinutes?, otpTtlMinutes?, testMode?, skipGeoCheck?
    che ritieni più sicuro.
 2. La terza persona apre il link (interfaccia in francese, essendo il
    destinatario francofono), concede il permesso GPS (o no, a meno che il
-   check geografico sia stato disattivato), riceve un SMS con un codice a 6
-   cifre (oppure, in modalità test, il codice è visibile solo lato admin),
-   lo inserisce, poi vede il nome (libero, oppure precompilato e bloccato se
-   l'admin ne ha impostato uno) e accetta la clausola di riservatezza.
-   Prima di scaricare, vede quanti e quali documenti sono inclusi nel link.
-3. Ogni PDF scaricato ha un watermark diagonale ripetuto su ogni pagina con
-   nome, data/ora e IP di chi lo ha scaricato — visibile anche stampato.
+   check geografico sia stato disattivato), poi inserisce il codice OTP: via
+   SMS in modalità normale, oppure quello che tu (admin) le hai già
+   comunicato a mano se il link è in modalità "Invio manuale OTP" (in
+   modalità test, il codice è visibile solo lato admin). Poi vede il nome
+   (libero, oppure precompilato e bloccato se l'admin ne ha impostato uno) e
+   accetta la clausola di riservatezza. Prima di scaricare, vede quanti e
+   quali documenti sono inclusi nel link.
+3. Ogni PDF scaricato riceve un piccolo codice identificativo discreto in
+   basso a destra su ogni pagina (nessuna diagonale, nessuna ripetizione),
+   mentre nome del destinatario, IP e data/ora completi vengono incorporati
+   solo nei metadati del PDF (invisibili a schermo e in stampa, recuperabili
+   con strumenti come `exiftool` in caso di dispute).
    - Se il link include **un solo documento**, il download restituisce
      direttamente il PDF con watermark.
    - Se il link include **più documenti**, tutti i PDF vengono prima

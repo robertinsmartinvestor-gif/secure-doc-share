@@ -12,6 +12,9 @@ type GenerateResult = {
   documentFilenames: string[];
   expiresAt: number;
   testMode: boolean;
+  manualOtpMode: boolean;
+  manualOtpCode: string | null;
+  otpTtlMinutes: number;
   skipGeoCheck: boolean;
 };
 
@@ -42,9 +45,10 @@ const TTL_OPTIONS = [
   { value: 1440, label: "24 ore" },
 ];
 
-const OTP_TTL_OPTIONS = [
-  { value: 5, label: "5 minuti" },
+const MANUAL_OTP_TTL_OPTIONS = [
   { value: 15, label: "15 minuti" },
+  { value: 30, label: "30 minuti" },
+  { value: 60, label: "60 minuti" },
 ];
 
 export default function AdminPage() {
@@ -54,9 +58,22 @@ export default function AdminPage() {
   const [customCountry, setCustomCountry] = useState("");
   const [expectedRecipientName, setExpectedRecipientName] = useState("");
   const [ttlMinutes, setTtlMinutes] = useState(60);
-  const [otpTtlMinutes, setOtpTtlMinutes] = useState(5);
-  const [testMode, setTestMode] = useState(false);
+  const [manualOtpTtlMinutes, setManualOtpTtlMinutes] = useState(15);
+  const [testMode, setTestModeState] = useState(false);
+  const [manualOtpMode, setManualOtpModeState] = useState(false);
   const [skipGeoCheck, setSkipGeoCheck] = useState(false);
+
+  // Modalità test e Invio manuale OTP sono scenari diversi (sviluppo vs uso
+  // reale senza SMS automatico) e non hanno senso insieme: attivarne una
+  // disattiva l'altra.
+  function setTestMode(value: boolean) {
+    setTestModeState(value);
+    if (value) setManualOtpModeState(false);
+  }
+  function setManualOtpMode(value: boolean) {
+    setManualOtpModeState(value);
+    if (value) setTestModeState(false);
+  }
 
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -129,8 +146,9 @@ export default function AdminPage() {
           expectedCountry,
           expectedRecipientName: expectedRecipientName.trim() || undefined,
           ttlMinutes,
-          otpTtlMinutes,
+          otpTtlMinutes: manualOtpMode ? manualOtpTtlMinutes : undefined,
           testMode,
+          manualOtpMode,
           skipGeoCheck,
         }),
       });
@@ -261,22 +279,39 @@ export default function AdminPage() {
         ))}
       </select>
 
-      <label style={labelStyle}>Durata OTP</label>
-      <select
-        value={otpTtlMinutes}
-        onChange={(e) => setOtpTtlMinutes(Number(e.target.value))}
-        style={inputStyle}
-      >
-        {OTP_TTL_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      {manualOtpMode ? (
+        <>
+          <label style={labelStyle}>Durata OTP (invio manuale)</label>
+          <select
+            value={manualOtpTtlMinutes}
+            onChange={(e) => setManualOtpTtlMinutes(Number(e.target.value))}
+            style={inputStyle}
+          >
+            {MANUAL_OTP_TTL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <p style={{ fontSize: 12, color: "#888", marginTop: 12 }}>
+          Durata OTP: 5 minuti (fissa, invio via SMS quasi istantaneo).
+        </p>
+      )}
 
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333", marginTop: 12 }}>
         <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
         Modalità test (nessun SMS reale, il codice OTP viene mostrato qui)
+      </label>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333", marginTop: 8 }}>
+        <input
+          type="checkbox"
+          checked={manualOtpMode}
+          onChange={(e) => setManualOtpMode(e.target.checked)}
+        />
+        Invio manuale OTP (nessun SMS automatico, uso reale senza Twilio)
       </label>
 
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333", marginTop: 8 }}>
@@ -346,8 +381,20 @@ export default function AdminPage() {
             <li>Documenti inclusi: {result.documentFilenames.join(", ")}</li>
             <li>Scadenza: {new Date(result.expiresAt).toLocaleString("it-IT")}</li>
             <li>Modalità test: {result.testMode ? "attiva" : "disattiva"}</li>
+            <li>Invio manuale OTP: {result.manualOtpMode ? "attivo" : "disattivo"}</li>
             {result.skipGeoCheck && <li>Check geografico: disattivato</li>}
           </ul>
+
+          {result.manualOtpMode && result.manualOtpCode && (
+            <div style={{ marginTop: 16, padding: 12, background: "#fff3cd", borderRadius: 6 }}>
+              <p style={{ fontSize: 13, color: "#555", marginBottom: 4 }}>
+                Codice OTP da comunicare al destinatario (valido {result.otpTtlMinutes} minuti):
+              </p>
+              <code style={{ fontSize: 20, fontWeight: "bold", letterSpacing: 2 }}>
+                {result.manualOtpCode}
+              </code>
+            </div>
+          )}
         </div>
       )}
 

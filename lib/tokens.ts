@@ -13,7 +13,8 @@ export type AccessRecord = {
   documentFilenames: string[]; // nomi file dentro secure-files/ inclusi in questo link
   ttlMinutes: number; // durata del link (in minuti) usata alla creazione
   otpTtlMinutes: number; // durata dell'OTP (in minuti) da usare quando viene generato
-  testMode: boolean; // se true: niente invio SMS reale, il codice OTP torna nella risposta JSON di check-access
+  testMode: boolean; // se true: niente invio SMS reale, il codice OTP torna nella risposta JSON di check-access (per sviluppo/test)
+  manualOtpMode: boolean; // se true: niente invio SMS reale, uso reale senza Twilio — l'OTP viene generato subito alla creazione e comunicato dall'admin a mano
   skipGeoCheck: boolean; // se true: salta interamente il controllo IP/GPS
   createdAt: number;
   expiresAt: number;
@@ -56,6 +57,7 @@ export function createAccessLink(options: {
   ttlMinutes?: number;
   otpTtlMinutes?: number;
   testMode?: boolean;
+  manualOtpMode?: boolean;
   skipGeoCheck?: boolean;
 }) {
   const {
@@ -66,6 +68,7 @@ export function createAccessLink(options: {
     ttlMinutes = 60,
     otpTtlMinutes = 5,
     testMode = false,
+    manualOtpMode = false,
     skipGeoCheck = false,
   } = options;
 
@@ -80,6 +83,7 @@ export function createAccessLink(options: {
     ttlMinutes,
     otpTtlMinutes,
     testMode,
+    manualOtpMode,
     skipGeoCheck,
     createdAt: now,
     expiresAt: now + ttlMinutes * 60 * 1000,

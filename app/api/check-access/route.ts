@@ -74,11 +74,18 @@ export async function POST(req: NextRequest) {
 }
 
 async function sendOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>) {
+  if (record.manualOtpMode) {
+    // Il codice è già stato generato alla creazione del link e comunicato
+    // manualmente dall'admin: non lo rigeneriamo qui, altrimenti quello già
+    // condiviso col destinatario diventerebbe invalido.
+    const code = record.otpCode ?? generateAndSetOtp(record);
+    return NextResponse.json({ otpSent: true, manualCode: code });
+  }
+
   // Genera OTP a 6 cifre. In modalità test non viene inviato via SMS: torna
   // direttamente nella risposta JSON, così la pagina admin può mostrarlo
   // senza consumare credito Twilio durante i test.
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  setOtp(record.token, code, record.otpTtlMinutes);
+  const code = generateAndSetOtp(record);
 
   if (record.testMode) {
     return NextResponse.json({ otpSent: true, testCode: code });
@@ -86,6 +93,12 @@ async function sendOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>) 
 
   await sendOtpSms(record.phoneNumber, code);
   return NextResponse.json({ otpSent: true });
+}
+
+function generateAndSetOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>): string {
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  setOtp(record.token, code, record.otpTtlMinutes);
+  return code;
 }
 
 function getIp(req: NextRequest): string {
