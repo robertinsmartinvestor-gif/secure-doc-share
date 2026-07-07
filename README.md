@@ -8,26 +8,39 @@ Sistema per condividere documenti sensibili con un link monouso, protetto da:
 ## Setup
 
 ```bash
-npm install twilio pdf-lib
+npm install twilio pdf-lib jszip
 cp .env.example .env.local
 # compila .env.local con le tue credenziali Twilio
 ```
 
-Metti il documento reale in `secure-files/documenti.pdf` (cartella NON dentro `public/`,
-così non è raggiungibile direttamente via URL).
+Metti i documenti reali dentro `secure-files/` (cartella NON dentro `public/`,
+così non sono raggiungibili direttamente via URL). Puoi caricare più file PDF
+in questa cartella, e scegliere quali includere in ciascun link al momento
+della generazione.
 
 ## Come si usa
 
-1. Tu chiami `POST /api/create-link` con il numero di telefono Cameroon
-   della terza persona (`+237...`) e il tuo `ADMIN_SECRET`. Ottieni un link tipo
+1. Tu apri `/admin`, inserisci il tuo `ADMIN_SECRET`, il numero di telefono
+   Cameroon della terza persona (`+237...`) e i nomi dei file (già presenti in
+   `secure-files/`) da includere in questo link, separati da virgola
+   (es. `documenti.pdf, allegato.pdf`). In alternativa puoi chiamare
+   direttamente `POST /api/create-link` con `{ adminSecret, phoneNumber,
+   documentFilenames: ["documenti.pdf", "allegato.pdf"] }`. Ottieni un link tipo
    `https://tuodominio.com/verify/<token>`.
 2. Mandi quel link (non i documenti) alla terza persona, sul canale che ritieni
    più sicuro.
-3. La terza persona apre il link, concede il permesso GPS (o no), riceve un
-   SMS con un codice a 6 cifre, lo inserisce, inserisce il proprio nome e
-   accetta la clausola di riservatezza, e solo allora può scaricare il PDF.
-4. Il PDF scaricato ha un watermark diagonale ripetuto su ogni pagina con
+3. La terza persona apre il link (interfaccia in francese, essendo il
+   destinatario francofono), concede il permesso GPS (o no), riceve un SMS
+   con un codice a 6 cifre, lo inserisce, inserisce il proprio nome e
+   accetta la clausola di riservatezza. Prima di scaricare, vede quanti e
+   quali documenti sono inclusi nel link.
+4. Ogni PDF scaricato ha un watermark diagonale ripetuto su ogni pagina con
    nome, data/ora e IP di chi lo ha scaricato — visibile anche stampato.
+   - Se il link include **un solo documento**, il download restituisce
+     direttamente il PDF con watermark.
+   - Se il link include **più documenti**, tutti i PDF vengono prima
+     marchiati con il watermark e poi impacchettati in un unico file
+     `.zip` da scaricare.
 5. Il link diventa inutilizzabile dopo un download o dopo la scadenza (default 1h).
 
 ## Cosa NON risolve questo sistema

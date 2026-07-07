@@ -8,14 +8,14 @@ export async function POST(req: NextRequest) {
   const { token, code } = await req.json();
   const record = getAccessRecord(token);
 
-  if (!record) return NextResponse.json({ error: "link non valido" }, { status: 404 });
+  if (!record) return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   if (Date.now() > record.expiresAt)
-    return NextResponse.json({ error: "link scaduto" }, { status: 410 });
+    return NextResponse.json({ error: "lien expiré" }, { status: 410 });
   if (!record.otpCode || !record.otpExpiresAt || Date.now() > record.otpExpiresAt) {
-    return NextResponse.json({ error: "codice scaduto, richiedine uno nuovo" }, { status: 410 });
+    return NextResponse.json({ error: "code expiré, veuillez en demander un nouveau" }, { status: 410 });
   }
   if (record.otpAttempts >= MAX_ATTEMPTS) {
-    return NextResponse.json({ error: "troppi tentativi, link bloccato" }, { status: 429 });
+    return NextResponse.json({ error: "trop de tentatives, lien bloqué" }, { status: 429 });
   }
 
   record.otpAttempts += 1;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       gpsCountryMatch: null,
       result: "otp_failed",
     });
-    return NextResponse.json({ error: "codice errato" }, { status: 401 });
+    return NextResponse.json({ error: "code incorrect" }, { status: 401 });
   }
 
   markVerified(token);

@@ -9,6 +9,7 @@ export type AccessRecord = {
   token: string;
   phoneNumber: string; // numero Cameroon della terza persona, es. +237XXXXXXXXX
   expectedCountry: string; // "CM"
+  documentFilenames: string[]; // nomi file dentro secure-files/ inclusi in questo link
   createdAt: number;
   expiresAt: number;
   otpCode: string | null;
@@ -29,13 +30,19 @@ export type AccessRecord = {
 
 const store = new Map<string, AccessRecord>();
 
-export function createAccessLink(phoneNumber: string, expectedCountry = "CM", ttlMinutes = 60) {
+export function createAccessLink(
+  phoneNumber: string,
+  documentFilenames: string[],
+  expectedCountry = "CM",
+  ttlMinutes = 60
+) {
   const token = randomBytes(24).toString("hex");
   const now = Date.now();
   const record: AccessRecord = {
     token,
     phoneNumber,
     expectedCountry,
+    documentFilenames,
     createdAt: now,
     expiresAt: now + ttlMinutes * 60 * 1000,
     otpCode: null,

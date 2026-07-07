@@ -5,6 +5,7 @@ import { useState } from "react";
 export default function AdminPage() {
   const [adminSecret, setAdminSecret] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("+237");
+  const [documentFilenames, setDocumentFilenames] = useState("documenti.pdf");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ link: string; expiresAt: number } | null>(null);
@@ -16,11 +17,16 @@ export default function AdminPage() {
     setResult(null);
     setCopied(false);
 
+    const filenames = documentFilenames
+      .split(",")
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0);
+
     try {
       const res = await fetch("/api/create-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminSecret, phoneNumber }),
+        body: JSON.stringify({ adminSecret, phoneNumber, documentFilenames: filenames }),
       });
 
       let data;
@@ -71,9 +77,19 @@ export default function AdminPage() {
         style={inputStyle}
       />
 
+      <label style={labelStyle}>
+        File da includere (nomi in secure-files/, separati da virgola)
+      </label>
+      <input
+        value={documentFilenames}
+        onChange={(e) => setDocumentFilenames(e.target.value)}
+        placeholder="documenti.pdf, allegato.pdf"
+        style={inputStyle}
+      />
+
       <button
         onClick={handleGenerate}
-        disabled={loading || !adminSecret || phoneNumber.length < 9}
+        disabled={loading || !adminSecret || phoneNumber.length < 9 || documentFilenames.trim().length === 0}
         style={{ ...buttonStyle, opacity: loading ? 0.6 : 1 }}
       >
         {loading ? "Generazione..." : "Genera link"}

@@ -13,10 +13,10 @@ export async function POST(req: NextRequest) {
 
   const record = getAccessRecord(token);
   if (!record) {
-    return NextResponse.json({ error: "link non valido" }, { status: 404 });
+    return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   }
   if (Date.now() > record.expiresAt) {
-    return NextResponse.json({ error: "link scaduto" }, { status: 410 });
+    return NextResponse.json({ error: "lien expiré" }, { status: 410 });
   }
   if (record.used) {
     logAttempt(token, {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       gpsCountryMatch: null,
       result: "already_used",
     });
-    return NextResponse.json({ error: "documento già scaricato in precedenza" }, { status: 410 });
+    return NextResponse.json({ error: "document déjà téléchargé précédemment" }, { status: 410 });
   }
 
   const ip = getIp(req);
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   if (blocked) {
     return NextResponse.json(
-      { error: "Accesso non consentito da questa posizione." },
+      { error: "Accès non autorisé depuis cette position." },
       { status: 403 }
     );
   }

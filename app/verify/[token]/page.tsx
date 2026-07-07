@@ -15,6 +15,7 @@ export default function VerifyPage() {
   const [loading, setLoading] = useState(false);
   const [recipientName, setRecipientName] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [documentFilenames, setDocumentFilenames] = useState<string[]>([]);
 
   async function handleStart() {
     setLoading(true);
@@ -45,7 +46,7 @@ export default function VerifyPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error || "Errore imprevisto");
+      setError(data.error || "Erreur inattendue");
       setStep("error");
       return;
     }
@@ -64,7 +65,7 @@ export default function VerifyPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error || "Codice non valido");
+      setError(data.error || "Code invalide");
       return;
     }
     setStep("consent");
@@ -82,24 +83,25 @@ export default function VerifyPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error || "Errore imprevisto");
+      setError(data.error || "Erreur inattendue");
       return;
     }
+    setDocumentFilenames(data.documentFilenames || []);
     setStep("ready");
   }
 
   return (
     <main style={{ maxWidth: 480, margin: "80px auto", fontFamily: "system-ui", padding: 24 }}>
-      <h1 style={{ fontSize: 20, marginBottom: 24 }}>Accesso ai documenti</h1>
+      <h1 style={{ fontSize: 20, marginBottom: 24 }}>Accès aux documents</h1>
 
       {step === "start" && (
         <>
           <p style={{ color: "#555", marginBottom: 16 }}>
-            Per procedere ti chiederemo di condividere la posizione del dispositivo
-            e ti invieremo un codice via SMS.
+            Pour continuer, nous vous demanderons de partager la position de
+            votre appareil et nous vous enverrons un code par SMS.
           </p>
           <button onClick={handleStart} disabled={loading} style={buttonStyle}>
-            {loading ? "Verifica in corso..." : "Continua"}
+            {loading ? "Vérification en cours..." : "Continuer"}
           </button>
         </>
       )}
@@ -107,28 +109,28 @@ export default function VerifyPage() {
       {step === "otp" && (
         <>
           <p style={{ color: "#555", marginBottom: 16 }}>
-            Ti abbiamo inviato un codice via SMS. Inseriscilo qui sotto.
+            Nous vous avons envoyé un code par SMS. Saisissez-le ci-dessous.
           </p>
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
             maxLength={6}
-            placeholder="Codice a 6 cifre"
+            placeholder="Code à 6 chiffres"
             style={inputStyle}
           />
           <button onClick={handleVerifyOtp} disabled={loading} style={buttonStyle}>
-            {loading ? "Verifica..." : "Conferma codice"}
+            {loading ? "Vérification..." : "Confirmer le code"}
           </button>
         </>
       )}
 
       {step === "consent" && (
         <>
-          <p style={{ color: "#555", marginBottom: 12 }}>Identità verificata.</p>
+          <p style={{ color: "#555", marginBottom: 12 }}>Identité vérifiée.</p>
           <input
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
-            placeholder="Il tuo nome completo"
+            placeholder="Votre nom complet"
             style={inputStyle}
           />
           <label style={{ display: "flex", gap: 8, fontSize: 14, color: "#333", marginBottom: 16 }}>
@@ -137,26 +139,32 @@ export default function VerifyPage() {
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
             />
-            Confermo di essere {recipientName || "[nome sopra]"}, riconosco che questo
-            documento è riservato e mi impegno a non condividerlo con terzi in
-            nessuna forma. Il documento riporterà il mio nome, IP e orario di
-            scaricamento.
+            Je confirme être {recipientName || "[nom ci-dessus]"}, je reconnais
+            que ce document est confidentiel et je m&apos;engage à ne le
+            partager avec aucun tiers, sous quelque forme que ce soit. Le
+            document portera mon nom, mon adresse IP et l&apos;heure de
+            téléchargement.
           </label>
           <button
             onClick={handleAcceptConsent}
             disabled={loading || !agreed || recipientName.trim().length < 2}
             style={{ ...buttonStyle, opacity: loading || !agreed ? 0.5 : 1 }}
           >
-            {loading ? "Attendere..." : "Accetto e continuo"}
+            {loading ? "Veuillez patienter..." : "J'accepte et je continue"}
           </button>
         </>
       )}
 
       {step === "ready" && (
         <>
-          <p style={{ color: "#2a7", marginBottom: 16 }}>Pronto per il download.</p>
+          <p style={{ color: "#2a7", marginBottom: 12 }}>Prêt pour le téléchargement.</p>
+          <p style={{ color: "#555", fontSize: 14, marginBottom: 16 }}>
+            {documentFilenames.length === 1
+              ? `Ce lien contient 1 document : ${documentFilenames[0]}`
+              : `Ce lien contient ${documentFilenames.length} documents : ${documentFilenames.join(", ")}`}
+          </p>
           <a href={`/api/download?token=${token}`} style={buttonStyle}>
-            Scarica documenti
+            Télécharger les documents
           </a>
         </>
       )}

@@ -12,7 +12,7 @@ export async function applyWatermark(
   const pdfDoc = await PDFDocument.load(originalBytes);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  const dateStr = new Date(info.timestamp).toLocaleString("it-IT");
+  const dateStr = new Date(info.timestamp).toLocaleString("fr-FR");
   const shortToken = info.token.slice(0, 8);
   const line1 = `${info.recipientName} — ${dateStr}`;
   const line2 = `IP: ${info.ip} — ref: ${shortToken}`;
@@ -44,7 +44,7 @@ export async function applyWatermark(
 
     // Riga leggibile a piè di pagina, per riferimento veloce senza dover
     // cercare nella filigrana diagonale
-    page.drawText(`Copia riservata per ${info.recipientName} — ${dateStr} — ${shortToken}`, {
+    page.drawText(`Copie confidentielle pour ${info.recipientName} — ${dateStr} — ${shortToken}`, {
       x: 20,
       y: 10,
       size: 7,

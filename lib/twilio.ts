@@ -22,7 +22,7 @@ function getClient() {
 
 export async function sendOtpSms(toPhoneNumber: string, code: string) {
   await getClient().messages.create({
-    body: `Il tuo codice di verifica per accedere ai documenti è: ${code}. Valido 5 minuti. Non condividerlo con nessuno.`,
+    body: `Votre code de vérification pour accéder aux documents est : ${code}. Valable 5 minutes. Ne le partagez avec personne.`,
     from: process.env.TWILIO_FROM_NUMBER,
     to: toPhoneNumber,
   });
