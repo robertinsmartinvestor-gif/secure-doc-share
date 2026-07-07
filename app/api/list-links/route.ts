@@ -12,5 +12,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ links: listAllTokens() });
+  return NextResponse.json({ links: await listAllTokens() });
 }

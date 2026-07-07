@@ -1,12 +1,12 @@
 // app/api/verify-otp/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessRecord, logAttempt, markVerified } from "@/lib/tokens";
+import { getAccessRecord, incrementOtpAttempts, logAttempt, markVerified } from "@/lib/tokens";
 
 const MAX_ATTEMPTS = 5;
 
 export async function POST(req: NextRequest) {
   const { token, code } = await req.json();
-  const record = getAccessRecord(token);
+  const record = await getAccessRecord(token);
 
   if (!record) return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   if (Date.now() > record.expiresAt)
@@ -18,12 +18,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "trop de tentatives, lien bloqué" }, { status: 429 });
   }
 
-  record.otpAttempts += 1;
+  await incrementOtpAttempts(token);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 
   if (code !== record.otpCode) {
-    logAttempt(token, {
+    await logAttempt(token, {
       timestamp: Date.now(),
       ip,
       country: null,
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "code incorrect" }, { status: 401 });
   }
 
-  markVerified(token);
-  logAttempt(token, {
+  await markVerified(token);
+  await logAttempt(token, {
     timestamp: Date.now(),
     ip,
     country: null,

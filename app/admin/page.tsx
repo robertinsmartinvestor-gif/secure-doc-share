@@ -75,10 +75,8 @@ export default function AdminPage() {
     if (value) setTestModeState(false);
   }
 
-  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [filesError, setFilesError] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,57 +90,52 @@ export default function AdminPage() {
   const expectedCountry = countryOption === "OTHER" ? customCountry.toUpperCase() : countryOption;
   const countryValid = /^[A-Z]{2}$/.test(expectedCountry);
 
-  async function handleLoadFiles() {
-    setFilesLoading(true);
-    setFilesError(null);
-    setAvailableFiles([]);
-    setSelectedFiles([]);
-
-    try {
-      const res = await fetch("/api/list-documents", {
-        headers: { "x-admin-secret": adminSecret },
-      });
-
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        setFilesError(`Errore ${res.status}: richiesta non riuscita`);
-        return;
-      }
-
-      if (!res.ok) {
-        setFilesError(data.error || "Errore imprevisto");
-        return;
-      }
-      setAvailableFiles(data.filenames || []);
-    } catch {
-      setFilesError("Errore di rete: impossibile contattare il server. Riprova.");
-    } finally {
-      setFilesLoading(false);
-    }
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(files);
+    setUploadError(null);
   }
 
-  function toggleFile(filename: string) {
-    setSelectedFiles((prev) =>
-      prev.includes(filename) ? prev.filter((f) => f !== filename) : [...prev, filename]
-    );
+  function removeFile(name: string) {
+    setSelectedFiles((prev) => prev.filter((f) => f.name !== name));
+  }
+
+  async function uploadFile(file: File): Promise<{ filename: string; url: string }> {
+    const formData = new FormData();
+    formData.append("adminSecret", adminSecret);
+    formData.append("file", file);
+
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `Errore ${res.status} durante il caricamento di ${file.name}`);
+    }
+    return { filename: data.filename, url: data.url };
   }
 
   async function handleGenerate() {
     setLoading(true);
     setError(null);
+    setUploadError(null);
     setResult(null);
     setCopied(false);
 
     try {
+      let documents: { filename: string; url: string }[];
+      try {
+        documents = await Promise.all(selectedFiles.map(uploadFile));
+      } catch (uploadErr) {
+        setUploadError(uploadErr instanceof Error ? uploadErr.message : "Errore durante il caricamento dei file");
+        return;
+      }
+
       const res = await fetch("/api/create-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           adminSecret,
           phoneNumber,
-          documentFilenames: selectedFiles,
+          documents,
           expectedCountry,
           expectedRecipientName: expectedRecipientName.trim() || undefined,
           ttlMinutes,
@@ -166,6 +159,7 @@ export default function AdminPage() {
         return;
       }
       setResult(data);
+      setSelectedFiles([]);
       handleLoadLinks();
     } catch {
       setError("Errore di rete: impossibile contattare il server. Riprova.");
@@ -216,6 +210,10 @@ export default function AdminPage() {
     phoneNumber.length >= 9 &&
     countryValid &&
     selectedFiles.length > 0;
+
+  function formatFileSize(bytes: number): string {
+    return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   return (
     <main style={{ maxWidth: 560, margin: "80px auto", fontFamily: "system-ui", padding: 24 }}>
@@ -323,38 +321,42 @@ export default function AdminPage() {
         Disattiva check geografico (IP/GPS)
       </label>
 
-      <label style={labelStyle}>Documenti da includere (da secure-files/)</label>
-      <button
-        onClick={handleLoadFiles}
-        disabled={filesLoading || !adminSecret}
-        style={{ ...buttonStyle, background: "#555", marginTop: 0, opacity: filesLoading ? 0.6 : 1 }}
-      >
-        {filesLoading ? "Caricamento..." : "Carica elenco file"}
-      </button>
+      <label style={labelStyle}>Documenti da includere (PDF)</label>
+      <input
+        type="file"
+        accept="application/pdf"
+        multiple
+        onChange={handleFileSelect}
+        style={{ ...inputStyle, padding: "8px 0" }}
+      />
 
-      {filesError && <p style={{ color: "#c33", marginTop: 8 }}>{filesError}</p>}
+      {uploadError && <p style={{ color: "#c33", marginTop: 8 }}>{uploadError}</p>}
 
-      {availableFiles.length > 0 && (
+      {selectedFiles.length > 0 && (
         <div style={{ marginTop: 12, marginBottom: 8 }}>
-          {availableFiles.map((filename) => (
-            <label
-              key={filename}
-              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333", marginBottom: 6 }}
+          {selectedFiles.map((file) => (
+            <div
+              key={file.name}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 14, color: "#333", marginBottom: 6 }}
             >
-              <input
-                type="checkbox"
-                checked={selectedFiles.includes(filename)}
-                onChange={() => toggleFile(filename)}
-              />
-              {filename}
-            </label>
+              <span>
+                {file.name} <span style={{ color: "#888" }}>({formatFileSize(file.size)})</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => removeFile(file.name)}
+                style={{ background: "none", border: "none", color: "#c33", cursor: "pointer", fontSize: 13 }}
+              >
+                Rimuovi
+              </button>
+            </div>
           ))}
         </div>
       )}
 
-      {availableFiles.length === 0 && !filesLoading && !filesError && (
+      {selectedFiles.length === 0 && (
         <p style={{ fontSize: 13, color: "#888", marginTop: 8 }}>
-          Nessun file caricato. Premi &quot;Carica elenco file&quot;.
+          Nessun file selezionato. I PDF vengono caricati su Vercel Blob al momento della generazione del link.
         </p>
       )}
 

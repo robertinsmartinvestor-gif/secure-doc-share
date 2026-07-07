@@ -4,7 +4,7 @@ import { getAccessRecord, recordConsent } from "@/lib/tokens";
 
 export async function POST(req: NextRequest) {
   const { token, recipientName } = await req.json();
-  const record = getAccessRecord(token);
+  const record = await getAccessRecord(token);
 
   if (!record) return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   if (!record.verified)
@@ -18,6 +18,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "nom invalide" }, { status: 400 });
   }
 
-  recordConsent(token, finalName.trim());
-  return NextResponse.json({ ok: true, documentFilenames: record.documentFilenames });
+  await recordConsent(token, finalName.trim());
+  return NextResponse.json({ ok: true, documentFilenames: record.documents.map((d) => d.filename) });
 }

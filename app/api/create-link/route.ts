@@ -4,8 +4,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAccessLink, setOtp } from "@/lib/tokens";
-import { access } from "fs/promises";
-import path from "path";
 
 const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 const COUNTRY_RE = /^[A-Za-z]{2}$/;
@@ -17,7 +15,7 @@ export async function POST(req: NextRequest) {
   const {
     phoneNumber,
     adminSecret,
-    documentFilenames,
+    documents,
     expectedCountry,
     expectedRecipientName,
     ttlMinutes,
@@ -75,37 +73,22 @@ export async function POST(req: NextRequest) {
     ? otpTtlMinutes ?? ALLOWED_MANUAL_OTP_TTL_MINUTES[0]
     : NORMAL_OTP_TTL_MINUTES;
 
-  if (!Array.isArray(documentFilenames) || documentFilenames.length === 0) {
+  if (!Array.isArray(documents) || documents.length === 0) {
     return NextResponse.json(
-      { error: "documentFilenames mancante: specifica almeno un file di secure-files/" },
+      { error: "documents mancante: carica almeno un PDF prima di generare il link" },
       { status: 400 }
     );
   }
-  if (!documentFilenames.every((f) => typeof f === "string" && isValidFilename(f))) {
+  if (!documents.every(isValidDocument)) {
     return NextResponse.json(
-      { error: "documentFilenames contiene nomi file non validi (solo *.pdf, senza percorsi)" },
-      { status: 400 }
-    );
-  }
-
-  const missing: string[] = [];
-  for (const filename of documentFilenames) {
-    try {
-      await access(path.join(process.cwd(), "secure-files", filename));
-    } catch {
-      missing.push(filename);
-    }
-  }
-  if (missing.length > 0) {
-    return NextResponse.json(
-      { error: `file non trovati in secure-files/: ${missing.join(", ")}` },
+      { error: "documents contiene voci non valide: ogni documento deve avere filename (*.pdf) e url Blob validi" },
       { status: 400 }
     );
   }
 
-  const record = createAccessLink({
+  const record = await createAccessLink({
     phoneNumber,
-    documentFilenames,
+    documents,
     expectedCountry: expectedCountry.toUpperCase(),
     expectedRecipientName: expectedRecipientName?.trim() || null,
     ttlMinutes: ttlMinutes ?? 60,
@@ -121,7 +104,7 @@ export async function POST(req: NextRequest) {
   let manualOtpCode: string | null = null;
   if (record.manualOtpMode) {
     manualOtpCode = String(Math.floor(100000 + Math.random() * 900000));
-    setOtp(record.token, manualOtpCode, record.otpTtlMinutes);
+    await setOtp(record.token, manualOtpCode, record.otpTtlMinutes);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
@@ -130,7 +113,7 @@ export async function POST(req: NextRequest) {
     phoneNumber: record.phoneNumber,
     expectedCountry: record.expectedCountry,
     expectedRecipientName: record.expectedRecipientName,
-    documentFilenames: record.documentFilenames,
+    documentFilenames: record.documents.map((d) => d.filename),
     expiresAt: record.expiresAt,
     testMode: record.testMode,
     manualOtpMode: record.manualOtpMode,
@@ -140,12 +123,31 @@ export async function POST(req: NextRequest) {
   });
 }
 
+// I documenti arrivano già caricati su Vercel Blob via POST /api/upload:
+// qui validiamo solo la forma dei dati (nessun path traversal, url Blob
+// plausibile), non il contenuto del file.
+function isValidDocument(doc: unknown): doc is { filename: string; url: string } {
+  if (typeof doc !== "object" || doc === null) return false;
+  const { filename, url } = doc as { filename?: unknown; url?: unknown };
+  if (typeof filename !== "string" || !isValidFilename(filename)) return false;
+  if (typeof url !== "string" || !isValidBlobUrl(url)) return false;
+  return true;
+}
+
 // Accetta qualsiasi nome file *.pdf (spazi, accenti, parentesi inclusi),
-// purché non contenga separatori di percorso o riferimenti relativi che
-// permetterebbero di uscire da secure-files/.
+// purché non contenga separatori di percorso o riferimenti relativi.
 function isValidFilename(name: string): boolean {
   if (!name.toLowerCase().endsWith(".pdf")) return false;
   if (name.includes("/") || name.includes("\\")) return false;
   if (name === "." || name === "..") return false;
-  return name === path.basename(name);
+  return true;
+}
+
+function isValidBlobUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && parsed.hostname.endsWith(".public.blob.vercel-storage.com");
+  } catch {
+    return false;
+  }
 }

@@ -5,15 +5,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessRecord, markUsed, setWatermarkCode } from "@/lib/tokens";
 import { applyWatermark, generateWatermarkCode } from "@/lib/watermark";
-import { readFile } from "fs/promises";
-import path from "path";
+import { downloadDocument } from "@/lib/blob";
 import JSZip from "jszip";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ error: "jeton manquant" }, { status: 400 });
 
-  const record = getAccessRecord(token);
+  const record = await getAccessRecord(token);
   if (!record) return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   if (!record.verified)
     return NextResponse.json({ error: "vérification OTP non terminée" }, { status: 403 });
@@ -31,14 +30,13 @@ export async function GET(req: NextRequest) {
   // sul PDF a questo download specifico.
   const downloadTimestamp = Date.now();
   const watermarkCode = generateWatermarkCode(record.token, downloadTimestamp);
-  setWatermarkCode(token, watermarkCode);
+  await setWatermarkCode(token, watermarkCode);
 
-  // Metti i documenti reali fuori da /public, in una cartella non servita
-  // direttamente, es. /secure-files, così sono raggiungibili solo da qui.
+  // I documenti sono su Vercel Blob (URL salvato nel record al momento della
+  // creazione del link), non più su filesystem locale.
   const watermarkedFiles: { filename: string; bytes: Uint8Array }[] = [];
-  for (const filename of record.documentFilenames) {
-    const filePath = path.join(process.cwd(), "secure-files", path.basename(filename));
-    const fileBuffer = await readFile(filePath);
+  for (const doc of record.documents) {
+    const fileBuffer = await downloadDocument(doc.url);
     const watermarked = await applyWatermark(fileBuffer, {
       recipientName: record.recipientName,
       ip,
@@ -46,10 +44,10 @@ export async function GET(req: NextRequest) {
       timestamp: downloadTimestamp,
       watermarkCode,
     });
-    watermarkedFiles.push({ filename, bytes: watermarked });
+    watermarkedFiles.push({ filename: doc.filename, bytes: watermarked });
   }
 
-  markUsed(token);
+  await markUsed(token);
 
   if (watermarkedFiles.length === 1) {
     return new NextResponse(Buffer.from(watermarkedFiles[0].bytes), {

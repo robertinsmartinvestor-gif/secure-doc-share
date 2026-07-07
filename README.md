@@ -7,16 +7,32 @@ Sistema per condividere documenti sensibili con un link monouso, protetto da:
 
 ## Setup
 
+Lo storage è su due prodotti del Marketplace Vercel — nessun setup OAuth o
+service account esterno richiesto:
+
+1. **Upstash Redis** (stato dei link e storico): dashboard Vercel → progetto
+   `secure-doc-share` → tab **Storage** → **Create Database** → **Upstash** →
+   **Redis** → **Create**, collegandolo al progetto. Questo popola
+   automaticamente le env var del progetto (a seconda della versione
+   dell'integrazione: `KV_REST_API_URL`/`KV_REST_API_TOKEN` oppure
+   `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` — controlla i nomi
+   esatti nel tab "Quickstart"/".env.local" del database appena creato).
+2. **Vercel Blob** (i PDF): stesso pannello **Storage** → **Create Database**
+   → **Blob** → **Create**, collegandolo al progetto. Popola automaticamente
+   `BLOB_READ_WRITE_TOKEN`.
+
+Per lo sviluppo locale, copia i valori generati nel tuo `.env.local`:
+
 ```bash
-npm install twilio pdf-lib jszip
+npm install
 cp .env.example .env.local
-# compila .env.local con le tue credenziali Twilio
+# compila .env.local con: ADMIN_SECRET, le credenziali Twilio, le env var
+# Upstash Redis e BLOB_READ_WRITE_TOKEN (copiate dalla dashboard Vercel)
 ```
 
-Metti i documenti reali dentro `secure-files/` (cartella NON dentro `public/`,
-così non sono raggiungibili direttamente via URL). Puoi caricare più file PDF
-in questa cartella, e scegliere quali includere in ciascun link al momento
-della generazione.
+I documenti PDF non vanno più messi in una cartella locale: si caricano
+direttamente dalla pagina `/admin` al momento della creazione di ogni link,
+e finiscono su Vercel Blob.
 
 ## Come si usa
 
@@ -25,10 +41,7 @@ della generazione.
 `/admin` è ora lo strumento centrale sia per generare link reali sia per
 testarli, senza dover chiamare le API a mano:
 
-1. Inserisci il tuo `ADMIN_SECRET` e premi **"Carica elenco file"**: la lista
-   dei PDF viene letta dinamicamente da `secure-files/` (via `GET
-   /api/list-documents`) e mostrata come checkbox, invece di doverli scrivere
-   a mano.
+1. Inserisci il tuo `ADMIN_SECRET`.
 2. Compila il form:
    - **Numero di telefono**: qualsiasi numero in formato internazionale
      E.164 (es. `+391234567890`, `+237XXXXXXXXX`), non solo Cameroon.
@@ -38,7 +51,9 @@ testarli, senza dover chiamare le API a mano:
      nome viene salvato nel link e mostrato **precompilato e non
      modificabile** nello step di consenso che il destinatario vede dopo
      l'OTP — così chi apre il link non può dichiarare un nome diverso.
-   - **Documenti da includere**: seleziona uno o più PDF dalla checkbox list.
+   - **Documenti da includere**: seleziona uno o più PDF dal tuo dispositivo
+     con il file picker. Vengono caricati su Vercel Blob (`POST
+     /api/upload`) al momento di "Genera link", non prima.
    - **Durata del link**: 30 minuti / 1 ora / 6 ore / 24 ore.
    - **Durata OTP**: fissa a 5 minuti, tranne quando è attiva la modalità
      "Invio manuale OTP" (vedi sotto), dove diventa selezionabile.
@@ -70,10 +85,12 @@ testarli, senza dover chiamare le API a mano:
    (`Creato` / `OTP inviato` / `Verificato` / `Usato` / `Scaduto`), data di
    creazione e scadenza. Premi **"Aggiorna"** per ricaricarlo.
 
-In alternativa puoi chiamare direttamente `POST /api/create-link` con
-`{ adminSecret, phoneNumber, documentFilenames, expectedCountry,
-expectedRecipientName?, ttlMinutes?, otpTtlMinutes?, testMode?,
-manualOtpMode?, skipGeoCheck? }`.
+In alternativa puoi chiamare direttamente le API: prima `POST /api/upload`
+(`multipart/form-data` con `adminSecret` e `file`) per ogni PDF, che
+restituisce `{ filename, url }` (l'URL è su Vercel Blob); poi `POST
+/api/create-link` con `{ adminSecret, phoneNumber, documents: [{ filename,
+url }, ...], expectedCountry, expectedRecipientName?, ttlMinutes?,
+otpTtlMinutes?, testMode?, manualOtpMode?, skipGeoCheck? }`.
 
 ### Flusso del destinatario
 
@@ -114,10 +131,20 @@ manualOtpMode?, skipGeoCheck? }`.
 - Considera di aggiungere, se il rischio è alto, una domanda di sicurezza a cui
   solo la vera terza persona saprebbe rispondere, in aggiunta all'OTP.
 
+## Storage
+
+- **Stato dei link** (`lib/tokens.ts`): Upstash Redis. Ogni link è salvato
+  come chiave `token:{token}` con valore JSON e TTL uguale alla scadenza del
+  link (`expiresAt`), così Redis elimina da solo i dati vecchi. Un secondo
+  indice, la sorted set `all_tokens` (ordinata per data di creazione), tiene
+  traccia di tutti i token emessi per popolare lo storico in `/admin`
+  (Redis non garantisce uno scan efficiente per pattern su tutti i piani).
+- **Documenti PDF** (`lib/blob.ts`): Vercel Blob. Ogni PDF caricato da
+  `/admin` diventa un blob pubblico con URL non indovinabile; l'URL (non il
+  file) è quello salvato nel record del link.
+
 ## Prossimi passi consigliati
 
-- Sostituire lo store in-memory (`lib/tokens.ts`) con Redis o Postgres se
-  fai il deploy su Vercel/serverless (la memoria non persiste tra invocazioni).
 - Aggiungere rate limiting sull'endpoint `/api/check-access` e `/api/verify-otp`
   per prevenire brute force.
 - Loggare tutti i tentativi (già previsto in `attempts[]`) e controllarli dopo

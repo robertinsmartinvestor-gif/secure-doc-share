@@ -11,7 +11,7 @@ import { sendOtpSms } from "@/lib/twilio";
 export async function POST(req: NextRequest) {
   const { token, gpsCountry } = await req.json();
 
-  const record = getAccessRecord(token);
+  const record = await getAccessRecord(token);
   if (!record) {
     return NextResponse.json({ error: "lien invalide" }, { status: 404 });
   }
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "lien expiré" }, { status: 410 });
   }
   if (record.used) {
-    logAttempt(token, {
+    await logAttempt(token, {
       timestamp: Date.now(),
       ip: getIp(req),
       country: null,
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const ip = getIp(req);
 
   if (record.skipGeoCheck) {
-    logAttempt(token, {
+    await logAttempt(token, {
       timestamp: Date.now(),
       ip,
       country: null,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   // ma lo segnaliamo come rischio più alto nel log.
   const blocked = !ipMatch && (gpsMatch === false || gpsMatch === null);
 
-  logAttempt(token, {
+  await logAttempt(token, {
     timestamp: Date.now(),
     ip,
     country: ipCountry,
@@ -73,19 +73,19 @@ export async function POST(req: NextRequest) {
   return sendOtp(record);
 }
 
-async function sendOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>) {
+async function sendOtp(record: NonNullable<Awaited<ReturnType<typeof getAccessRecord>>>) {
   if (record.manualOtpMode) {
     // Il codice è già stato generato alla creazione del link e comunicato
     // manualmente dall'admin: non lo rigeneriamo qui, altrimenti quello già
     // condiviso col destinatario diventerebbe invalido.
-    const code = record.otpCode ?? generateAndSetOtp(record);
+    const code = record.otpCode ?? (await generateAndSetOtp(record));
     return NextResponse.json({ otpSent: true, manualCode: code });
   }
 
   // Genera OTP a 6 cifre. In modalità test non viene inviato via SMS: torna
   // direttamente nella risposta JSON, così la pagina admin può mostrarlo
   // senza consumare credito Twilio durante i test.
-  const code = generateAndSetOtp(record);
+  const code = await generateAndSetOtp(record);
 
   if (record.testMode) {
     return NextResponse.json({ otpSent: true, testCode: code });
@@ -95,9 +95,9 @@ async function sendOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>) 
   return NextResponse.json({ otpSent: true });
 }
 
-function generateAndSetOtp(record: NonNullable<ReturnType<typeof getAccessRecord>>): string {
+async function generateAndSetOtp(record: NonNullable<Awaited<ReturnType<typeof getAccessRecord>>>): Promise<string> {
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  setOtp(record.token, code, record.otpTtlMinutes);
+  await setOtp(record.token, code, record.otpTtlMinutes);
   return code;
 }
 
