@@ -1,12 +1,15 @@
 // lib/blob.ts
 // Upload/download dei PDF su Vercel Blob (Storage → Blob nel dashboard
 // Vercel). Sostituisce la vecchia cartella locale secure-files/.
+//
+// Lo store è privato: i blob non sono raggiungibili con un fetch() anonimo
+// sul loro URL, serve autenticarsi con BLOB_READ_WRITE_TOKEN tramite get().
 
-import { put } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 
 export async function uploadDocument(file: Buffer, filename: string): Promise<string> {
   const blob = await put(`documents/${filename}`, file, {
-    access: "public",
+    access: "private",
     contentType: "application/pdf",
     addRandomSuffix: true,
   });
@@ -14,10 +17,10 @@ export async function uploadDocument(file: Buffer, filename: string): Promise<st
 }
 
 export async function downloadDocument(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Impossibile scaricare il documento da Blob (${res.status}): ${url}`);
+  const result = await get(url, { access: "private" });
+  if (!result || result.statusCode !== 200) {
+    throw new Error(`Impossibile scaricare il documento da Blob: ${url}`);
   }
-  const arrayBuffer = await res.arrayBuffer();
+  const arrayBuffer = await new Response(result.stream).arrayBuffer();
   return Buffer.from(arrayBuffer);
 }

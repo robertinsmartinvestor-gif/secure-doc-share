@@ -23,7 +23,18 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const url = await uploadDocument(buffer, file.name);
+
+  let url: string;
+  try {
+    url = await uploadDocument(buffer, file.name);
+  } catch (err) {
+    // Es. BLOB_READ_WRITE_TOKEN mancante/non valido: senza questo try/catch
+    // Next risponde con un body vuoto e il client vede un generico
+    // "Unexpected end of JSON input" invece del vero errore.
+    console.error("Errore upload su Vercel Blob:", err);
+    const message = err instanceof Error ? err.message : "errore sconosciuto durante l'upload";
+    return NextResponse.json({ error: `Upload su Blob fallito: ${message}` }, { status: 500 });
+  }
 
   return NextResponse.json({ filename: file.name, url });
 }

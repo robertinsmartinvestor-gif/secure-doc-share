@@ -106,7 +106,14 @@ export default function AdminPage() {
     formData.append("file", file);
 
     const res = await fetch("/api/upload", { method: "POST", body: formData });
-    const data = await res.json();
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Errore ${res.status} durante il caricamento di ${file.name}: risposta del server non valida`);
+    }
+
     if (!res.ok) {
       throw new Error(data.error || `Errore ${res.status} durante il caricamento di ${file.name}`);
     }

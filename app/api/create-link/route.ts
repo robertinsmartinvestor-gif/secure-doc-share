@@ -146,7 +146,9 @@ function isValidFilename(name: string): boolean {
 function isValidBlobUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" && parsed.hostname.endsWith(".public.blob.vercel-storage.com");
+    // Copre sia store pubblici (<id>.public.blob.vercel-storage.com) sia
+    // privati (<id>.private.blob.vercel-storage.com).
+    return parsed.protocol === "https:" && parsed.hostname.endsWith(".blob.vercel-storage.com");
   } catch {
     return false;
   }

@@ -139,9 +139,11 @@ otpTtlMinutes?, testMode?, manualOtpMode?, skipGeoCheck? }`.
   indice, la sorted set `all_tokens` (ordinata per data di creazione), tiene
   traccia di tutti i token emessi per popolare lo storico in `/admin`
   (Redis non garantisce uno scan efficiente per pattern su tutti i piani).
-- **Documenti PDF** (`lib/blob.ts`): Vercel Blob. Ogni PDF caricato da
-  `/admin` diventa un blob pubblico con URL non indovinabile; l'URL (non il
-  file) è quello salvato nel record del link.
+- **Documenti PDF** (`lib/blob.ts`): Vercel Blob, in modalità **privata**
+  (`access: "private"`): l'URL del blob da solo non basta a scaricare il
+  file, serve autenticarsi con `BLOB_READ_WRITE_TOKEN` (è quello che fa
+  `downloadDocument`). L'URL (non il file) è quello salvato nel record del
+  link.
 
 ## Prossimi passi consigliati
 
