@@ -5,6 +5,29 @@ import { useParams } from "next/navigation";
 
 type Step = "start" | "otp" | "consent" | "ready" | "error";
 
+// Testo della clausola di riservatezza, spezzato in segmenti per evidenziare
+// in grassetto/rosso solo le porzioni più critiche senza usare HTML grezzo.
+const CONSENT_SEGMENTS: { text: string; highlight?: boolean }[] = [
+  { text: "Ce document est " },
+  { text: "strictement confidentiel et personnel", highlight: true },
+  {
+    text:
+      " : il est destiné exclusivement à votre dossier de demande de visa auprès de l'ambassade. Le partager, le transmettre ou le copier à un tiers, sous quelque forme que ce soit, ",
+  },
+  { text: "est interdit", highlight: true },
+  { text: " et peut " },
+  {
+    text: "compromettre la validité de votre dossier ainsi que la poursuite de vos études en Italie",
+    highlight: true,
+  },
+  { text: ". " },
+  {
+    text: "Chaque copie de ce document porte une trace permettant d'en identifier l'origine",
+    highlight: true,
+  },
+  { text: "." },
+];
+
 export default function VerifyPage() {
   const params = useParams();
   const token = params.token as string;
@@ -164,11 +187,17 @@ export default function VerifyPage() {
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
             />
-            Je confirme être {recipientName || "[nom ci-dessus]"}, je reconnais
-            que ce document est confidentiel et je m&apos;engage à ne le
-            partager avec aucun tiers, sous quelque forme que ce soit. Le
-            document portera mon nom, mon adresse IP et l&apos;heure de
-            téléchargement.
+            <span>
+              {CONSENT_SEGMENTS.map((seg, i) =>
+                seg.highlight ? (
+                  <strong key={i} style={{ color: "#c33" }}>
+                    {seg.text}
+                  </strong>
+                ) : (
+                  <span key={i}>{seg.text}</span>
+                )
+              )}
+            </span>
           </label>
           <button
             onClick={handleAcceptConsent}

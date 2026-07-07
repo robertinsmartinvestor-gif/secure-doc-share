@@ -24,6 +24,7 @@ export type AccessRecord = {
   used: boolean; // una volta scaricato il documento, non riapribile
   recipientName: string | null; // nome dichiarato dalla terza persona, usato nel watermark
   consentAcceptedAt: number | null; // timestamp di accettazione della clausola di riservatezza
+  watermarkCode: string | null; // codice breve stampato sul PDF scaricato, per risalire al download da una copia fisica
   attempts: {
     timestamp: number;
     ip: string;
@@ -89,6 +90,7 @@ export function createAccessLink(options: {
     used: false,
     recipientName: null,
     consentAcceptedAt: null,
+    watermarkCode: null,
     attempts: [],
   };
   store.set(token, record);
@@ -130,6 +132,12 @@ export function recordConsent(token: string, recipientName: string) {
   if (!r) return;
   r.recipientName = recipientName;
   r.consentAcceptedAt = Date.now();
+}
+
+export function setWatermarkCode(token: string, code: string) {
+  const r = store.get(token);
+  if (!r) return;
+  r.watermarkCode = code;
 }
 
 function deriveStatus(r: AccessRecord): TokenStatus {

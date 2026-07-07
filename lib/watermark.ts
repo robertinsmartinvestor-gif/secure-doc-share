@@ -1,56 +1,64 @@
 // lib/watermark.ts
-// Applica una filigrana dinamica su ogni pagina del PDF con i dati
-// di chi lo sta scaricando: nome, data/ora, IP, token.
+// Applica un watermark visivo minimo (un codice breve in basso a destra su
+// ogni pagina, discreto anche stampato) e incorpora i dati identificativi
+// completi (nome, IP, timestamp, token) nei metadati PDF: invisibili a
+// schermo/stampa ma recuperabili con strumenti come exiftool.
 // npm install pdf-lib
 
-import { PDFDocument, rgb, degrees, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { createHash } from "crypto";
+
+// Codice breve deterministico derivato dal token e dal momento del
+// download: non contiene nome/IP per esteso, serve solo come riferimento
+// da poter incrociare in seguito con lib/tokens.ts (AccessRecord.watermarkCode).
+export function generateWatermarkCode(token: string, timestamp: number): string {
+  return createHash("sha256")
+    .update(`${token}:${timestamp}`)
+    .digest("hex")
+    .slice(0, 8)
+    .toUpperCase();
+}
 
 export async function applyWatermark(
   originalBytes: Buffer,
-  info: { recipientName: string; ip: string; token: string; timestamp: number }
+  info: {
+    recipientName: string;
+    ip: string;
+    token: string;
+    timestamp: number;
+    watermarkCode: string;
+  }
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(originalBytes);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
   const dateStr = new Date(info.timestamp).toLocaleString("fr-FR");
-  const shortToken = info.token.slice(0, 8);
-  const line1 = `${info.recipientName} — ${dateStr}`;
-  const line2 = `IP: ${info.ip} — ref: ${shortToken}`;
+
+  // Metadati invisibili a schermo e in stampa, recuperabili con exiftool o
+  // strumenti equivalenti in caso di dispute sulla provenienza del documento.
+  pdfDoc.setAuthor(info.recipientName);
+  pdfDoc.setSubject(`IP: ${info.ip} — téléchargé le ${dateStr}`);
+  pdfDoc.setKeywords([
+    `token:${info.token}`,
+    `code:${info.watermarkCode}`,
+    `ip:${info.ip}`,
+    `timestamp:${info.timestamp}`,
+  ]);
 
   const pages = pdfDoc.getPages();
   for (const page of pages) {
-    const { width, height } = page.getSize();
+    const { width } = page.getSize();
+    const size = 6;
+    const textWidth = font.widthOfTextAtSize(info.watermarkCode, size);
 
-    // Filigrana diagonale ripetuta, semi-trasparente, sopra il contenuto:
-    // ripetuta più volte così ritagliare una singola istanza non basta a
-    // eliminarla dalla pagina.
-    const rows = 4;
-    const cols = 2;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const x = (width / cols) * c + 20;
-        const y = (height / rows) * r + 20;
-        page.drawText(`${line1}  |  ${line2}`, {
-          x,
-          y,
-          size: 9,
-          font,
-          color: rgb(0.6, 0.6, 0.6),
-          opacity: 0.35,
-          rotate: degrees(35),
-        });
-      }
-    }
-
-    // Riga leggibile a piè di pagina, per riferimento veloce senza dover
-    // cercare nella filigrana diagonale
-    page.drawText(`Copie confidentielle pour ${info.recipientName} — ${dateStr} — ${shortToken}`, {
-      x: 20,
-      y: 10,
-      size: 7,
+    // Tag unico in basso a destra, nessuna ripetizione né diagonale: discreto
+    // anche su documenti amministrativi stampati.
+    page.drawText(info.watermarkCode, {
+      x: width - textWidth - 12,
+      y: 8,
+      size,
       font,
-      color: rgb(0.4, 0.4, 0.4),
-      opacity: 0.6,
+      color: rgb(0.75, 0.75, 0.75),
     });
   }
 

@@ -3,8 +3,8 @@
 // dopo il primo download riuscito, così non è riutilizzabile.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessRecord, markUsed } from "@/lib/tokens";
-import { applyWatermark } from "@/lib/watermark";
+import { getAccessRecord, markUsed, setWatermarkCode } from "@/lib/tokens";
+import { applyWatermark, generateWatermarkCode } from "@/lib/watermark";
 import { readFile } from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
@@ -26,6 +26,13 @@ export async function GET(req: NextRequest) {
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 
+  // Un solo codice per l'intero download (stesso token, stesso istante),
+  // salvato nel record così da poter risalire in futuro dal codice stampato
+  // sul PDF a questo download specifico.
+  const downloadTimestamp = Date.now();
+  const watermarkCode = generateWatermarkCode(record.token, downloadTimestamp);
+  setWatermarkCode(token, watermarkCode);
+
   // Metti i documenti reali fuori da /public, in una cartella non servita
   // direttamente, es. /secure-files, così sono raggiungibili solo da qui.
   const watermarkedFiles: { filename: string; bytes: Uint8Array }[] = [];
@@ -36,7 +43,8 @@ export async function GET(req: NextRequest) {
       recipientName: record.recipientName,
       ip,
       token: record.token,
-      timestamp: Date.now(),
+      timestamp: downloadTimestamp,
+      watermarkCode,
     });
     watermarkedFiles.push({ filename, bytes: watermarked });
   }
