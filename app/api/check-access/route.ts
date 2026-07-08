@@ -48,17 +48,6 @@ export async function POST(req: NextRequest) {
 
   const ipCountry = await lookupIpCountry(ip);
 
-  // DEBUG TEMPORANEO — da rimuovere dopo aver individuato la causa del falso
-  // blocco geografico segnalato: mostra i tre valori grezzi prima di ogni
-  // normalizzazione/confronto, visibili nei Function Logs di Vercel.
-  console.log("[check-access] geo debug", {
-    token,
-    ip,
-    ipCountry,
-    gpsCountry,
-    expectedCountry: record.expectedCountry,
-  });
-
   // Normalizza entrambi i lati di ogni confronto: i valori dovrebbero già
   // arrivare in maiuscolo (lookupIpCountry/reverseGeocodeCountry/create-link
   // applicano .toUpperCase() a monte), ma normalizziamo di nuovo qui — punto
@@ -140,15 +129,46 @@ function getIp(req: NextRequest): string {
   return fwd ? fwd.split(",")[0].trim() : "unknown";
 }
 
+// ipapi.co ha una quota gratuita bassa (1000/giorno) legata all'IP del
+// *chiamante*: su Vercel le funzioni serverless condividono IP in uscita tra
+// molti progetti, quindi la quota si esaurisce facilmente indipendentemente
+// dal traffico di questa app, causando lookup falliti (ipCountry: null) anche
+// per IP reali corretti. Se il provider principale fallisce, proviamo un
+// secondo servizio gratuito (nessuna chiave richiesta) prima di arrenderci:
+// una singola fonte, in produzione, si è dimostrata insufficiente.
 async function lookupIpCountry(ip: string): Promise<string | null> {
   if (ip === "unknown") return null;
+  return (await lookupViaIpapiCo(ip)) ?? (await lookupViaIpwhoIs(ip));
+}
+
+async function lookupViaIpapiCo(ip: string): Promise<string | null> {
   try {
-    // Sostituibile con MaxMind GeoLite2 locale per non dipendere da un servizio esterno
     const res = await fetch(`https://ipapi.co/${ip}/country/`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn("[check-access] ipapi.co lookup fallita", { ip, status: res.status });
+      return null;
+    }
     const text = (await res.text()).trim();
     return text.length === 2 ? text.toUpperCase() : null;
-  } catch {
+  } catch (err) {
+    console.warn("[check-access] ipapi.co lookup errore", { ip, error: String(err) });
+    return null;
+  }
+}
+
+async function lookupViaIpwhoIs(ip: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://ipwho.is/${ip}`);
+    if (!res.ok) {
+      console.warn("[check-access] ipwho.is lookup fallita", { ip, status: res.status });
+      return null;
+    }
+    const data = (await res.json()) as { success?: boolean; country_code?: string };
+    if (data.success === false) return null;
+    const code = data.country_code;
+    return typeof code === "string" && code.length === 2 ? code.toUpperCase() : null;
+  } catch (err) {
+    console.warn("[check-access] ipwho.is lookup errore", { ip, error: String(err) });
     return null;
   }
 }
