@@ -33,6 +33,7 @@ export type AccessRecord = {
     country: string | null;
     gpsCountryMatch: boolean | null;
     result: "blocked_country" | "otp_sent" | "otp_verified" | "otp_failed" | "expired" | "already_used";
+    userAgent: string | null; // utile per distinguere un tentativo umano sospetto da un semplice retry
   }[];
 };
 
@@ -48,6 +49,7 @@ export type TokenSummary = {
   testCode: string | null; // OTP visibile solo per link in modalità test, e solo finché non usati
   documentCount: number;
   documentNames: string[];
+  attempts: AccessRecord["attempts"];
 };
 
 // Client Redis creato in modo lazy (non al caricamento del modulo) così che
@@ -275,6 +277,7 @@ export async function listAllTokens(): Promise<TokenSummary[]> {
       testCode: r.testMode && !r.used ? r.otpCode : null,
       documentCount: r.documents.length,
       documentNames: r.documents.map((d) => d.displayName),
+      attempts: r.attempts,
     });
   });
 

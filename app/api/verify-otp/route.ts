@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   await incrementOtpAttempts(token);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  const userAgent = req.headers.get("user-agent");
 
   if (code !== record.otpCode) {
     await logAttempt(token, {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       country: null,
       gpsCountryMatch: null,
       result: "otp_failed",
+      userAgent,
     });
     return NextResponse.json({ error: "code incorrect" }, { status: 401 });
   }
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
     country: null,
     gpsCountryMatch: null,
     result: "otp_verified",
+    userAgent,
   });
 
   return NextResponse.json({ verified: true, expectedRecipientName: record.expectedRecipientName });

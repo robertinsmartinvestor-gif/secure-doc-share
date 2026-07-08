@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
   if (Date.now() > record.expiresAt) {
     return NextResponse.json({ error: "lien expiré" }, { status: 410 });
   }
+  const userAgent = req.headers.get("user-agent");
+
   if (record.used) {
     await logAttempt(token, {
       timestamp: Date.now(),
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
       country: null,
       gpsCountryMatch: null,
       result: "already_used",
+      userAgent,
     });
     return NextResponse.json({ error: "document déjà téléchargé précédemment" }, { status: 410 });
   }
@@ -38,6 +41,7 @@ export async function POST(req: NextRequest) {
       country: null,
       gpsCountryMatch: null,
       result: "otp_sent",
+      userAgent,
     });
     return sendOtp(record);
   }
@@ -58,6 +62,7 @@ export async function POST(req: NextRequest) {
     country: ipCountry,
     gpsCountryMatch: gpsMatch,
     result: blocked ? "blocked_country" : "otp_sent",
+    userAgent,
   });
 
   if (blocked) {

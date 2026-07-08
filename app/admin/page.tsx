@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 type CountryOption = "CM" | "IT" | "OTHER";
 
@@ -20,6 +20,23 @@ type GenerateResult = {
 
 type LinkStatus = "created" | "otp_sent" | "verified" | "used" | "expired";
 
+type AttemptResult =
+  | "blocked_country"
+  | "otp_sent"
+  | "otp_verified"
+  | "otp_failed"
+  | "expired"
+  | "already_used";
+
+type Attempt = {
+  timestamp: number;
+  ip: string;
+  country: string | null;
+  gpsCountryMatch: boolean | null;
+  result: AttemptResult;
+  userAgent: string | null;
+};
+
 type LinkSummary = {
   token: string;
   phoneNumber: string;
@@ -30,7 +47,21 @@ type LinkSummary = {
   testCode: string | null;
   documentCount: number;
   documentNames: string[];
+  attempts: Attempt[];
 };
+
+const ATTEMPT_RESULT_LABELS: Record<AttemptResult, string> = {
+  blocked_country: "Bloccato (paese)",
+  otp_sent: "OTP inviato",
+  otp_verified: "OTP verificato",
+  otp_failed: "OTP errato",
+  expired: "Scaduto",
+  already_used: "Già usato",
+};
+
+function isAttemptAnomaly(a: Attempt): boolean {
+  return a.result === "blocked_country" || a.result === "otp_failed";
+}
 
 const STATUS_LABELS: Record<LinkStatus, string> = {
   created: "Creato",
@@ -90,6 +121,7 @@ export default function AdminPage() {
   const [links, setLinks] = useState<LinkSummary[]>([]);
   const [linksLoading, setLinksLoading] = useState(false);
   const [linksError, setLinksError] = useState<string | null>(null);
+  const [expandedToken, setExpandedToken] = useState<string | null>(null);
 
   const expectedCountry = countryOption === "OTHER" ? customCountry.toUpperCase() : countryOption;
   const countryValid = /^[A-Z]{2}$/.test(expectedCountry);
@@ -440,27 +472,105 @@ export default function AdminPage() {
               <th style={thStyle}>Numero</th>
               <th style={thStyle}>Documenti</th>
               <th style={thStyle}>Stato</th>
+              <th style={thStyle}>Tentativi</th>
               <th style={thStyle}>Creato</th>
               <th style={thStyle}>Scadenza</th>
               <th style={thStyle}>Codice test</th>
+              <th style={thStyle}></th>
             </tr>
           </thead>
           <tbody>
-            {links.map((l) => (
-              <tr key={l.token}>
-                <td style={tdStyle}><code>{l.token}</code></td>
-                <td style={tdStyle}>{l.phoneNumber}</td>
-                <td style={tdStyle} title={l.documentNames.join(", ")}>
-                  {l.documentCount} {l.documentCount === 1 ? "documento" : "documenti"}
-                </td>
-                <td style={tdStyle}>{STATUS_LABELS[l.status]}</td>
-                <td style={tdStyle}>{new Date(l.createdAt).toLocaleString("it-IT")}</td>
-                <td style={tdStyle}>{new Date(l.expiresAt).toLocaleString("it-IT")}</td>
-                <td style={tdStyle}>
-                  {l.testCode ? <code>{l.testCode}</code> : l.testMode ? "—" : ""}
-                </td>
-              </tr>
-            ))}
+            {links.map((l) => {
+              const anomalies = l.attempts.filter(isAttemptAnomaly).length;
+              const isExpanded = expandedToken === l.token;
+              return (
+                <Fragment key={l.token}>
+                  <tr>
+                    <td style={tdStyle}><code>{l.token}</code></td>
+                    <td style={tdStyle}>{l.phoneNumber}</td>
+                    <td style={tdStyle} title={l.documentNames.join(", ")}>
+                      {l.documentCount} {l.documentCount === 1 ? "documento" : "documenti"}
+                    </td>
+                    <td style={tdStyle}>{STATUS_LABELS[l.status]}</td>
+                    <td style={tdStyle}>
+                      {anomalies > 0 ? (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 8px",
+                            borderRadius: 12,
+                            background: "#fdecea",
+                            color: "#c33",
+                            fontWeight: 600,
+                            fontSize: 12,
+                          }}
+                        >
+                          {anomalies} bloccat{anomalies === 1 ? "o" : "i"}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#888" }}>{l.attempts.length || "—"}</span>
+                      )}
+                    </td>
+                    <td style={tdStyle}>{new Date(l.createdAt).toLocaleString("it-IT")}</td>
+                    <td style={tdStyle}>{new Date(l.expiresAt).toLocaleString("it-IT")}</td>
+                    <td style={tdStyle}>
+                      {l.testCode ? <code>{l.testCode}</code> : l.testMode ? "—" : ""}
+                    </td>
+                    <td style={tdStyle}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedToken(isExpanded ? null : l.token)}
+                        disabled={l.attempts.length === 0}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: l.attempts.length === 0 ? "#ccc" : "#333",
+                          cursor: l.attempts.length === 0 ? "default" : "pointer",
+                          fontSize: 12,
+                          textDecoration: l.attempts.length === 0 ? "none" : "underline",
+                        }}
+                      >
+                        {isExpanded ? "Nascondi" : "Dettagli"}
+                      </button>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${l.token}-details`}>
+                      <td colSpan={9} style={{ ...tdStyle, background: "#fafafa" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th style={thStyleSmall}>Data/ora</th>
+                              <th style={thStyleSmall}>IP</th>
+                              <th style={thStyleSmall}>Paese</th>
+                              <th style={thStyleSmall}>Esito</th>
+                              <th style={thStyleSmall}>User agent</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...l.attempts]
+                              .sort((a, b) => b.timestamp - a.timestamp)
+                              .map((a, i) => (
+                                <tr key={i}>
+                                  <td style={tdStyleSmall}>{new Date(a.timestamp).toLocaleString("it-IT")}</td>
+                                  <td style={tdStyleSmall}><code>{a.ip}</code></td>
+                                  <td style={tdStyleSmall}>{a.country || "—"}</td>
+                                  <td style={{ ...tdStyleSmall, color: isAttemptAnomaly(a) ? "#c33" : "#333" }}>
+                                    {ATTEMPT_RESULT_LABELS[a.result]}
+                                  </td>
+                                  <td style={{ ...tdStyleSmall, color: "#888", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.userAgent || ""}>
+                                    {a.userAgent || "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       ) : (
@@ -513,5 +623,17 @@ const thStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: "8px 6px",
+  borderBottom: "1px solid #eee",
+};
+
+const thStyleSmall: React.CSSProperties = {
+  textAlign: "left",
+  padding: "4px 6px",
+  borderBottom: "1px solid #ddd",
+  color: "#888",
+};
+
+const tdStyleSmall: React.CSSProperties = {
+  padding: "4px 6px",
   borderBottom: "1px solid #eee",
 };
