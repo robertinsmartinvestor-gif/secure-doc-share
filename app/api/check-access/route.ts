@@ -48,8 +48,28 @@ export async function POST(req: NextRequest) {
 
   const ipCountry = await lookupIpCountry(ip);
 
-  const gpsMatch = gpsCountry ? gpsCountry === record.expectedCountry : null;
-  const ipMatch = ipCountry === record.expectedCountry;
+  // DEBUG TEMPORANEO — da rimuovere dopo aver individuato la causa del falso
+  // blocco geografico segnalato: mostra i tre valori grezzi prima di ogni
+  // normalizzazione/confronto, visibili nei Function Logs di Vercel.
+  console.log("[check-access] geo debug", {
+    token,
+    ip,
+    ipCountry,
+    gpsCountry,
+    expectedCountry: record.expectedCountry,
+  });
+
+  // Normalizza entrambi i lati di ogni confronto: i valori dovrebbero già
+  // arrivare in maiuscolo (lookupIpCountry/reverseGeocodeCountry/create-link
+  // applicano .toUpperCase() a monte), ma normalizziamo di nuovo qui — punto
+  // in cui avviene il confronto effettivo — per non dipendere silenziosamente
+  // da quell'invariante e per coprire eventuali record legacy in Redis.
+  const expectedCountry = normalizeCountry(record.expectedCountry);
+  const normalizedGpsCountry = normalizeCountry(gpsCountry);
+  const normalizedIpCountry = normalizeCountry(ipCountry);
+
+  const gpsMatch = normalizedGpsCountry ? normalizedGpsCountry === expectedCountry : null;
+  const ipMatch = normalizedIpCountry === expectedCountry;
 
   // Blocchi se ENTRAMBI i segnali disponibili dicono "non è il paese giusto".
   // Se il GPS non è disponibile (permesso negato), ci si basa solo sull'IP
@@ -104,6 +124,15 @@ async function generateAndSetOtp(record: NonNullable<Awaited<ReturnType<typeof g
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await setOtp(record.token, code, record.otpTtlMinutes);
   return code;
+}
+
+// Normalizza un codice paese per il confronto: maiuscolo + trim, tollerante
+// a null/undefined/stringa vuota (usato sia per il valore atteso salvato sul
+// record sia per i valori rilevati via IP/GPS).
+function normalizeCountry(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().toUpperCase();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function getIp(req: NextRequest): string {

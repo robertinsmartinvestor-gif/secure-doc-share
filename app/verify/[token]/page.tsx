@@ -51,7 +51,7 @@ export default function VerifyPage() {
     let gpsCountry: string | null = null;
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 15000 });
       });
       gpsCountry = await reverseGeocodeCountry(
         position.coords.latitude,
